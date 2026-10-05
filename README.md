@@ -15,7 +15,7 @@ Turn off **Follow the arrows** to play anything. Every chord also shows the scal
 
 ## Blues and Scales
 
-- **Blues:** the 12-bar major and minor blues in any key, a shuffle with boogie bass, the major and minor blues scales (and a mixed view), target-note arpeggios for I, IV and V, and an optional improvised solo.
+- **Blues:** the 12-bar major and minor blues in any key, a shuffle with boogie bass, the major and minor blues scales (and a mixed view), target-note arpeggios for I, IV and V, an optional improvised solo, and MIDI export (the band as one file, the solo as another).
 - **Scales:** major, natural, harmonic and melodic minor across the whole neck or keyboard, the seventh chords they build, extensions with avoid notes marked, and the mode for each degree.
 
 Everything works on **guitar, piano or ukulele**.

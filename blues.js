@@ -59,6 +59,11 @@
           <input type="range" id="bluesTempo" min="60" max="180" step="2">
         </label>
         <button class="toggle toggle-small" id="bluesMelody" aria-pressed="false"><span class="toggle-dot" aria-hidden="true"></span>Improvise a solo</button>
+        <span class="transport-spacer"></span>
+        <button class="btn" id="bluesMidi" type="button">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 V10.5 M4.5 7 L8 10.5 L11.5 7 M3 13.5 H13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Export MIDI
+        </button>
       </div>
     </section>
 
@@ -281,37 +286,77 @@
     pass(ctx, ctx.currentTime + 0.1, my);
   }
 
-  function pass(ctx, t0, my) {
-    const spb = 60 / st.bpm;
+  // One chorus of the band, in beats with the swing already applied. Playback and MIDI export
+  // both read from this, so the files match what you hear. Each chorus gets its own solo.
+  function arrangement(chorus) {
     const bars = def().bars;
+    const comp = [];
+    const bass = [];
     let prev = null;
     bars.forEach((id, i) => {
       const r = chord(id);
-      const barT = t0 + i * 4 * spb;
+      const at = i * 4;
       const v = T.voiceChord(r.pcs, r.root.pc, prev);
       prev = v.upper;
       // Comp: stabs on 2 and 4, a ghost on the swung "and" of 4.
-      [1, 3].forEach((b) => A.playChord(v, barT + b * spb, spb * 0.45, { noBass: true, strum: 0.006, vel: 0.9 }));
-      A.playChord(v, barT + swing(3.5) * spb, spb * 0.2, { noBass: true, strum: 0.004, vel: 0.45 });
+      comp.push({ beat: at + 1, dur: 0.45, vel: 0.9, upper: v.upper });
+      comp.push({ beat: at + 3, dur: 0.45, vel: 0.9, upper: v.upper });
+      comp.push({ beat: at + swing(3.5), dur: 0.2, vel: 0.45, upper: v.upper });
       // Bass: boogie pattern in swung eighths.
       const bassRoot = 40 + T.mod(r.root.pc - 4, 12);
       const pattern = r.quality === 'm7' ? [0, 3, 7, 9, 10, 9, 7, 3] : [0, 4, 7, 9, 10, 9, 7, 4];
-      pattern.forEach((semi, k) => A.bass(bassRoot + semi, barT + swing(k / 2) * spb, spb * 0.42));
-      timers.push(setTimeout(() => { if (my === token) mark(i); }, Math.max(0, (barT - ctx.currentTime) * 1000)));
+      pattern.forEach((semi, k) => bass.push({ midi: bassRoot + semi, beat: at + swing(k / 2), dur: 0.42 }));
     });
+    let solo = [];
     if (st.melody) {
       const tonic = T.parseKey(key());
       const segs = bars.map((id) => {
         const sc = T.buildScale(tonic, def().scaleFor[id]);
         return { scalePcs: sc.pcs, chordPcs: chord(id).pcs, beats: 4 };
       });
-      T.melody(segs, 11 + tonic.pc + (st.type === 'minor' ? 5 : 0) + Math.floor(t0)).forEach((n) => {
-        A.lead(n.midi, t0 + swing(n.beat) * spb, n.dur * spb, 0.1);
-      });
+      solo = T.melody(segs, 11 + tonic.pc + (st.type === 'minor' ? 5 : 0) + chorus * 7)
+        .map((n) => ({ midi: n.midi, beat: swing(n.beat), dur: n.dur }));
     }
-    const end = t0 + bars.length * 4 * spb;
+    return { comp, bass, solo, beats: bars.length * 4 };
+  }
+
+  function pass(ctx, t0, my, chorus) {
+    chorus = chorus || 0;
+    const spb = 60 / st.bpm;
+    const arr = arrangement(chorus);
+    arr.comp.forEach((c) => A.playChord({ upper: c.upper }, t0 + c.beat * spb, c.dur * spb, { noBass: true, strum: 0.005, vel: c.vel }));
+    arr.bass.forEach((n) => A.bass(n.midi, t0 + n.beat * spb, n.dur * spb));
+    arr.solo.forEach((n) => A.lead(n.midi, t0 + n.beat * spb, n.dur * spb, 0.1));
+    def().bars.forEach((id, i) => {
+      const barT = t0 + i * 4 * spb;
+      timers.push(setTimeout(() => { if (my === token) mark(i); }, Math.max(0, (barT - ctx.currentTime) * 1000)));
+    });
+    const end = t0 + arr.beats * spb;
     // The blues loops until you stop it.
-    timers.push(setTimeout(() => { if (my === token) pass(ctx, end, my); }, Math.max(0, (end - ctx.currentTime) * 1000 - 150)));
+    timers.push(setTimeout(() => { if (my === token) pass(ctx, end, my, chorus + 1); }, Math.max(0, (end - ctx.currentTime) * 1000 - 150)));
+  }
+
+  // ---------- MIDI export ----------
+
+  function exportMidi() {
+    const M = window.MidiFile;
+    const arr = arrangement(0);
+    const slug = 'changes-' + key().replace('♯', '-sharp').replace('♭', '-flat').toLowerCase() + '-' + st.type + '-blues';
+    const title = key() + ' ' + def().label.toLowerCase() + ', 12 bars';
+    const chords = [];
+    arr.comp.forEach((c) => c.upper.forEach((m) => chords.push({ midi: m, beat: c.beat, dur: c.dur, vel: Math.round(c.vel * 88) })));
+    C.download(M.write({ bpm: st.bpm, title, tracks: [
+      { name: 'Chords', channel: 0, program: 4, notes: chords },
+      { name: 'Bass', channel: 1, program: 33, notes: arr.bass.map((n) => Object.assign({ vel: 96 }, n)) },
+    ] }), slug + '.mid');
+    if (!st.melody) {
+      C.toast('Exported the 12 bars. Turn on Improvise a solo to export a solo file too.');
+      return;
+    }
+    setTimeout(() => C.download(M.write({ bpm: st.bpm, title: title + ' (solo)', tracks: [
+      { name: 'Solo', channel: 2, program: 0, notes: arr.solo.map((n) => Object.assign({ vel: 96 }, n)) },
+    ] }), slug + '-solo.mid'), 400);
+    C.toast('Exported the band and the solo as two MIDI files. The solo is the first chorus you hear.');
   }
 
   function mark(i) {
@@ -332,6 +377,7 @@
   }
 
   playBtn.addEventListener('click', () => (ui.playing ? stop() : play()));
+  $('#bluesMidi', root).addEventListener('click', exportMidi);
 
   const tempo = $('#bluesTempo', root);
   const tempoOut = $('#bluesTempoOut', root);

@@ -1127,7 +1127,7 @@
 
   // Shared with blues.js and scales.js.
   window.Changes = {
-    state, persist, toast, esc, fmtNote, chordHTML, stripHTML, placeMarker, bindStrip,
+    state, persist, toast, download, esc, fmtNote, chordHTML, stripHTML, placeMarker, bindStrip,
     scaleMark, nameMap, registerView,
     onInstrument: (fn) => instListeners.push(fn),
   };
