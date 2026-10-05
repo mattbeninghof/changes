@@ -7,6 +7,7 @@ ObjC.import('Foundation');
 const read = (p) => $.NSString.stringWithContentsOfFileEncodingError(p, $.NSUTF8StringEncoding, null).js;
 const cwd = $.NSFileManager.defaultManager.currentDirectoryPath.js;
 eval(read(cwd + '/theory.js'));
+eval(read(cwd + '/midi.js'));
 eval(read(cwd + '/test/theory.test.js'));
 const r = globalThis.__testResults;
 const failed = r.filter((t) => !t.ok);
