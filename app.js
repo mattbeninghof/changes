@@ -110,7 +110,15 @@
     minor: { title: 'Dark harmony', sub: 'Minor keys. Harmonic-minor chords, secondary diminished chords and the Neapolitan sixth.' },
   };
 
+  const modeSwitch = $('#modeSwitch');
+
   function renderMode() {
+    modeSwitch.querySelectorAll('.mode-btn').forEach((b) => {
+      const on = b.dataset.mode === state.mode;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    $('#flipBtn').textContent = 'Flip to ' + (state.mode === 'major' ? 'minor' : 'major');
     $('#progTitleMain').textContent = MODE_COPY[state.mode].title;
     $('#progSub').textContent = MODE_COPY[state.mode].sub;
     document.documentElement.dataset.mode = state.mode;
@@ -193,6 +201,18 @@
   }
 
   bindStrip(keyStrip, () => T.KEY_NAMES[state.mode], key, setKey);
+
+  // The board's own switch flips between the Progressions and Dark harmony tabs in place.
+  modeSwitch.addEventListener('click', (e) => {
+    const b = e.target.closest('.mode-btn');
+    if (b && b.dataset.mode !== state.mode) showView(b.dataset.mode === 'minor' ? 'dark' : 'progressions');
+  });
+  modeSwitch.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    showView(state.mode === 'major' ? 'dark' : 'progressions', true);
+    $('[aria-checked="true"]', modeSwitch).focus();
+  });
 
   function setKey(k) {
     if (k === key()) return;
@@ -434,6 +454,7 @@
     progEl.hidden = empty;
     transport.classList.toggle('is-empty', empty);
     $('#undoBtn').disabled = empty;
+    $('#flipBtn').disabled = empty;
     $('#clearBtn').disabled = empty;
     $('#playBtn').disabled = empty;
     $('#saveBtn').disabled = empty;
@@ -500,6 +521,27 @@
     renderBoard();
     renderProg();
     renderDetail();
+  });
+
+  // Carry the progression to the parallel key on the other card (C major -> C minor).
+  $('#flipBtn').addEventListener('click', () => {
+    if (!prog().length) return;
+    const from = state.mode;
+    const to = from === 'major' ? 'minor' : 'major';
+    const before = { ids: state.progs[to].slice(), key: state.keys[to] };
+    const flipped = T.flipProgression(from, prog());
+    state.progs[to] = flipped;
+    state.keys[to] = T.parallelKey(from, key(), to);
+    ui.selected = null;
+    persist();
+    showView(to === 'minor' ? 'dark' : 'progressions', true);
+    const broken = T.validate(to, flipped).filter((x) => !x).length;
+    toast('Flipped to ' + state.keys[to] + ' ' + to + (broken ? '. ' + broken + ' step' + (broken > 1 ? 's' : '') + ' now break the arrows.' : '.'), 'Undo', () => {
+      state.progs[to] = before.ids;
+      state.keys[to] = before.key;
+      persist();
+      showView(from === 'minor' ? 'dark' : 'progressions', true);
+    });
   });
 
   $('#undoBtn').addEventListener('click', () => {

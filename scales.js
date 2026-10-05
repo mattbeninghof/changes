@@ -11,11 +11,12 @@
   const root = $('#view-scales');
 
   const TYPES = [
-    { id: 'major', label: 'Major', keys: 'major' },
-    { id: 'natMinor', label: 'Natural minor', keys: 'minor' },
-    { id: 'harmMinor', label: 'Harmonic minor', keys: 'minor' },
-    { id: 'melMinor', label: 'Melodic minor', keys: 'minor' },
+    { id: 'major', label: 'Major', keys: 'major', short: 'Major' },
+    { id: 'natMinor', label: 'Natural minor', keys: 'minor', short: 'Natural' },
+    { id: 'harmMinor', label: 'Harmonic minor', keys: 'minor', short: 'Harmonic' },
+    { id: 'melMinor', label: 'Melodic minor', keys: 'minor', short: 'Melodic' },
   ];
+  const MINORS = TYPES.filter((t) => t.keys === 'minor');
   const typeOf = (id) => TYPES.find((t) => t.id === id) || TYPES[0];
 
   const st = C.state.scales;
@@ -23,6 +24,7 @@
   st.keys = Object.assign({ major: 'C', minor: 'A' }, st.keys || {});
   ['major', 'minor'].forEach((m) => { if (T.KEY_NAMES[m].indexOf(st.keys[m]) < 0) st.keys[m] = m === 'major' ? 'C' : 'A'; });
   st.labels = st.labels === 'notes' ? 'notes' : 'degrees';
+  if (MINORS.every((t) => t.id !== st.minorType)) st.minorType = st.type !== 'major' ? st.type : 'natMinor';
   st.degree = Number(st.degree) || 0;
 
   const keyList = () => T.KEY_NAMES[typeOf(st.type).keys];
@@ -34,6 +36,10 @@
         <h1 class="view-title">Scales</h1>
         <p class="view-sub">A scale across the whole instrument, the chords it builds, and the mode that goes with each.</p>
       </div>
+      <div class="mode" role="radiogroup" aria-label="Major or minor" id="scaleMode">
+        <button class="mode-btn" role="radio" data-mode="major"><span class="mode-name">Major</span><span class="mode-sub">bright</span></button>
+        <button class="mode-btn" role="radio" data-mode="minor"><span class="mode-name">Minor</span><span class="mode-sub">three flavors</span></button>
+      </div>
     </div>
 
     <section class="controls" aria-label="Key and scale">
@@ -41,8 +47,8 @@
         <div class="keybar-head"><span class="eyebrow">Set the key</span><span class="key-now" id="scaleKeyNow"></span></div>
         <div class="keystrip" id="scaleKeys" role="radiogroup" aria-label="Key"></div>
       </div>
-      <div class="seg" role="radiogroup" aria-label="Scale" id="scaleType">
-        ${TYPES.map((t) => '<button role="radio" data-type="' + t.id + '">' + t.label + '</button>').join('')}
+      <div class="seg" role="radiogroup" aria-label="Minor scale" id="scaleType">
+        ${MINORS.map((t) => '<button role="radio" data-type="' + t.id + '">' + t.short + '</button>').join('')}
       </div>
     </section>
 
@@ -79,6 +85,7 @@
   `;
 
   const strip = $('#scaleKeys', root);
+  const modeSeg = $('#scaleMode', root);
   const typeSeg = $('#scaleType', root);
   const labelSeg = $('#scaleLabels', root);
 
@@ -97,6 +104,12 @@
     C.placeMarker(strip);
     $('#scaleKeyNow', root).innerHTML = fmtNote(key()) + ' ' + esc(typeOf(st.type).label.toLowerCase());
     setSeg(typeSeg, 'type', st.type);
+    modeSeg.querySelectorAll('.mode-btn').forEach((b) => {
+      const on = b.dataset.mode === (st.type === 'major' ? 'major' : 'minor');
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    typeSeg.hidden = st.type === 'major';
     setSeg(labelSeg, 'labels', st.labels);
   }
 
@@ -106,17 +119,33 @@
     render();
   });
 
-  typeSeg.addEventListener('click', (e) => {
-    const b = e.target.closest('button');
-    if (!b || b.dataset.type === st.type) return;
-    // Keep the same tonic when jumping between scale families (C major -> C natural minor).
+  // Keep the same tonic when jumping between scale families (C major -> C natural minor).
+  function setType(type) {
+    if (type === st.type) return;
     const pc = T.parseKey(key()).pc;
-    st.type = b.dataset.type;
+    st.type = type;
+    if (type !== 'major') st.minorType = type;
     const fam = typeOf(st.type).keys;
     st.keys[fam] = T.KEY_NAMES[fam].find((k) => T.parseKey(k).pc === pc) || st.keys[fam];
     st.degree = 0;
     C.persist();
     render();
+  }
+
+  typeSeg.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b) setType(b.dataset.type);
+  });
+
+  modeSeg.addEventListener('click', (e) => {
+    const b = e.target.closest('.mode-btn');
+    if (b) setType(b.dataset.mode === 'major' ? 'major' : st.minorType);
+  });
+  modeSeg.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    setType(st.type === 'major' ? st.minorType : 'major');
+    $('[aria-checked="true"]', modeSeg).focus();
   });
 
   labelSeg.addEventListener('click', (e) => {

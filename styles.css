@@ -655,3 +655,5 @@ select:hover { border-color: var(--ink-3); }
 
 .field.is-off { opacity: .45; }
 .field select:disabled { cursor: not-allowed; }
+
+.seg[hidden] { display: none; }

@@ -60,6 +60,14 @@
         <h1 class="view-title" id="progTitleMain">Progressions</h1>
         <p class="view-sub" id="progSub">Major keys. Start in the middle row, then follow the arrows up and down.</p>
       </div>
+      <div class="mode" role="radiogroup" aria-label="Major or minor" id="modeSwitch">
+        <button class="mode-btn" role="radio" data-mode="major">
+          <span class="mode-name">Major</span><span class="mode-sub">lights up</span>
+        </button>
+        <button class="mode-btn" role="radio" data-mode="minor">
+          <span class="mode-name">Minor</span><span class="mode-sub">after hours</span>
+        </button>
+      </div>
     </div>
 
     <section class="controls" aria-label="Key and options">
@@ -101,6 +109,7 @@
           <div class="card-head">
             <h2 class="card-title" id="progTitle">Your progression</h2>
             <div class="prog-tools">
+              <button class="btn btn-quiet" id="flipBtn" type="button">Flip to minor</button>
               <button class="btn btn-quiet" id="undoBtn" type="button">Undo</button>
               <button class="btn btn-quiet" id="clearBtn" type="button">Clear</button>
             </div>

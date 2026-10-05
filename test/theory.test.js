@@ -348,5 +348,31 @@
     eq(Array.from(bytes.slice(tempoAt + 3, tempoAt + 6)), [(us >> 16) & 255, (us >> 8) & 255, us & 255]);
   });
 
+  // ---------- flip ----------
+
+  test('flip covers every chord on both cards', () => {
+    ['major', 'minor'].forEach((m) => {
+      const other = m === 'major' ? 'minor' : 'major';
+      T.MODES[m].chords.forEach((c) => {
+        const out = T.flipProgression(m, [c.id]);
+        ok(out.length === 1 && T.MODES[other].byId[out[0]], m + ' ' + c.id + ' has no counterpart');
+      });
+    });
+  });
+
+  test('flip: I vi IV V becomes i bVI iv V, and the lesson flips cleanly', () => {
+    eq(T.flipProgression('major', ['I', 'vi', 'IV', 'V']), ['i', 'bVI', 'iv', 'V']);
+    eq(T.flipProgression('minor', ['i', 'iv', 'V', 'i']), ['I', 'IV', 'V', 'I']);
+    eq(T.flipProgression('major', ['I', 'V/iii', 'iii', 'V']), ['i', 'vii', 'bIII', 'V']);
+    // No built-in lesson should flip into the same chord twice in a row.
+    T.EXAMPLES.major.forEach((ex) => {
+      const f = T.flipProgression('major', ex.ids);
+      ok(f.every((id, i) => i === 0 || id !== f[i - 1]), ex.name + ' doubles a chord when flipped: ' + f.join(' '));
+    });
+    ok(T.validate('minor', T.flipProgression('major', ['I', 'V/IV', 'IV', 'V'])).every(Boolean), 'secondary dominant should become a legal diminished move');
+    eq(T.parallelKey('major', 'E♭', 'minor'), 'E♭');
+    eq(T.parallelKey('major', 'D♭', 'minor'), 'C♯');
+  });
+
   root.__testResults = results;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

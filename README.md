@@ -9,14 +9,14 @@ A slide rule for harmony. Pick a key, start from the main chords, and follow the
 - **Progressions (major keys):** the seven diatonic chords, secondary dominants (play one, then resolve to its target), and modal interchange from the parallel minor (enter from I, IV or V, mix freely, return to I, IV or V).
 - **Dark harmony (minor keys):** harmonic-minor main chords, the vii°7 of V (four inversions, mix freely, land on V), the vii°7 of iv (mix freely, rise to iv or ♭VI), and the Neapolitan sixth (to V, directly or through vii°7/V).
 
-Turn off **Follow the arrows** to play anything. Every chord also shows the scale to play over it, and **Melody** writes a line over your progression, with up to five **harmony** voices stacked under it.
+Switch between them with the Major/Minor control on the board, or press **Flip** to carry your progression to the parallel key. Turn off **Follow the arrows** to play anything. Every chord also shows the scale to play over it, and **Melody** writes a line over your progression, with up to five **harmony** voices stacked under it.
 
 **Export MIDI** saves the chords (chords and bass tracks). With Melody on, it also saves the melody and each harmony as their own files.
 
 ## Blues and Scales
 
 - **Blues:** the 12-bar major and minor blues in any key, a shuffle with boogie bass, the major and minor blues scales (and a mixed view), target-note arpeggios for I, IV and V, an optional improvised solo, and MIDI export (the band as one file, the solo as another).
-- **Scales:** major, natural, harmonic and melodic minor across the whole neck or keyboard, the seventh chords they build, extensions with avoid notes marked, and the mode for each degree.
+- **Scales:** a Major/Minor switch, then natural, harmonic or melodic minor, across the whole neck or keyboard, the seventh chords they build, extensions with avoid notes marked, and the mode for each degree.
 
 Everything works on **guitar, piano or ukulele**.
 

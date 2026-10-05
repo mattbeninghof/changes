@@ -270,6 +270,29 @@
     ],
   };
 
+  // ---------- flipping a progression to the parallel key ----------
+  // Each chord maps to the chord that does the same job on the other card. Diatonic chords
+  // map degree for degree. Borrowed chords in major are native in minor, and back again.
+  // A secondary dominant becomes the diminished chord that leads to the same target.
+
+  const FLIP = {
+    major: {
+      I: 'i', ii: 'ii', iii: 'bIII', IV: 'iv', V: 'V', vi: 'bVI', vii: 'vii',
+      // V/ii and V/iii point at chords minor doesn't tonicize; keep them moving instead of doubling the target.
+      'V/I': 'V', 'V/ii': 'iv', 'V/iii': 'vii', 'V/IV': 'dIV-3', 'V/V': 'dV-4', 'V/vi': 'dIV-5',
+      'm-ii': 'ii', 'm-bIII': 'bIII', 'm-iv': 'iv', 'm-bVI': 'bVI', 'm-bVII': 'V',
+    },
+    minor: {
+      i: 'I', ii: 'ii', bIII: 'm-bIII', iv: 'IV', V: 'V', bVI: 'm-bVI', vii: 'vii',
+      N6: 'IV', 'dV-1': 'V/V', 'dV-3': 'V/V', 'dV-4': 'V/V', 'dV-6': 'V/V',
+      'dIV-2': 'V/IV', 'dIV-3': 'V/IV', 'dIV-5': 'V/IV', 'dIV-7': 'V/IV',
+    },
+  };
+
+  function flipProgression(fromMode, ids) {
+    return ids.map((id) => FLIP[fromMode][id]).filter(Boolean);
+  }
+
   // ---------- share codes ----------
 
   function encodeShare(modeId, keyName, sevenths, ids) {
@@ -702,7 +725,7 @@
   root.Theory = {
     LETTERS, KEY_NAMES, QUALITIES, MODES, EXAMPLES, GUITAR_OPEN, TUNINGS, SCALES, BLUES,
     mod, makeNote, simplify, tidy, parseKey, keyId, keyFromId, parallelKey,
-    realize, nextOptions, validate, encodeShare, decodeShare,
+    realize, nextOptions, validate, encodeShare, decodeShare, flipProgression,
     voiceChord, voiceProgression, guitarVoicings, fretVoicings,
     degreeLabel, rotate, buildScale, chordScale, harmonize, realizeBlues, melody, harmonyVoices,
   };
