@@ -18,6 +18,8 @@ Switch between them with the Major/Minor control on the board, or press **Flip**
 - **Blues:** the 12-bar major and minor blues in any key, a shuffle with boogie bass, the major and minor blues scales (and a mixed view), target-note arpeggios for I, IV and V, an optional improvised solo, and MIDI export (the band as one file, the solo as another).
 - **Scales:** a Major/Minor switch, then natural, harmonic or melodic minor, across the whole neck or keyboard, the seventh chords they build, extensions with avoid notes marked, and the mode for each degree.
 
+- **Sketchpad:** type any chords (`Em A7 Dmaj7 G/B`), or pick them from menus. Changes finds the key, labels each chord (in the key, secondary dominant, borrowed or chromatic), suggests a scale for each, and plays, harmonizes and exports them like the other tabs. Share links look like `#sketch=Em,A7,Dmaj7`.
+
 Everything works on **guitar, piano or ukulele**.
 
 ## Files
@@ -28,7 +30,7 @@ Everything works on **guitar, piano or ukulele**.
 - `midi.js`: a tiny Standard MIDI File writer
 - `instruments.js`: fretboard, keyboard and chord-box drawings
 - `app.js`: shell, Progressions view, shared helpers
-- `blues.js`, `scales.js`: the Blues and Scales views
+- `blues.js`, `scales.js`, `sketch.js`: the Blues, Scales and Sketchpad views
 - `test/`: open `test/index.html` in a browser, or run `sh test/run.sh` on macOS
 
 Plain HTML, CSS and JS. No build step, no dependencies.

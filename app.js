@@ -38,9 +38,10 @@
     melody: !!stored.melody,
     harmonies: Math.max(0, Math.min(5, Number(stored.harmonies) || 0)),
     instrument: ['guitar', 'piano', 'ukulele'].indexOf(stored.instrument) > -1 ? stored.instrument : 'guitar',
-    view: ['progressions', 'dark', 'blues', 'scales'].indexOf(stored.view) > -1 ? stored.view : 'progressions',
+    view: ['progressions', 'dark', 'blues', 'scales', 'sketch'].indexOf(stored.view) > -1 ? stored.view : 'progressions',
     blues: stored.blues || {},
     scales: stored.scales || {},
+    sketch: stored.sketch || {},
   };
   // Progressions is the major-key card, Dark harmony the minor-key card.
   if (state.view === 'progressions') state.mode = 'major';
@@ -69,7 +70,7 @@
       mode: state.mode, keys: state.keys, progs: state.progs,
       sevenths: state.sevenths, guided: state.guided,
       bpm: state.bpm, beats: state.beats, loop: state.loop, melody: state.melody, harmonies: state.harmonies,
-      instrument: state.instrument, view: state.view, blues: state.blues, scales: state.scales,
+      instrument: state.instrument, view: state.view, blues: state.blues, scales: state.scales, sketch: state.sketch,
     });
   }
 
@@ -737,43 +738,51 @@
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
-  function exportMidi() {
-    const ids = prog();
-    if (!ids.length) return;
+  // Shared by every tab with a chord progression. o: { slug, title, bpm, beats, chords, parts }
+  // where chords are realized chords and parts is { line, voices } or null when Melody is off.
+  function exportParts(o) {
     const M = window.MidiFile;
-    const b = state.beats;
-    const chords = ids.map(realize);
-    const title = key() + ' ' + state.mode + ': ' + chords.map((r) => r.symbol).join(' ');
+    const b = o.beats;
     const upper = [];
     const bass = [];
-    T.voiceProgression(chords).forEach((v, i) => {
+    T.voiceProgression(o.chords).forEach((v, i) => {
       v.upper.forEach((m) => upper.push({ midi: m, beat: i * b, dur: b, vel: 78 }));
       bass.push({ midi: v.bass, beat: i * b, dur: b, vel: 92 });
     });
-    download(M.write({ bpm: state.bpm, title, tracks: [
+    download(M.write({ bpm: o.bpm, title: o.title, tracks: [
       { name: 'Chords', channel: 0, program: 4, notes: upper },
       { name: 'Bass', channel: 1, program: 33, notes: bass },
-    ] }), fileSlug() + '-chords.mid');
+    ] }), o.slug + '-chords.mid');
 
-    if (!state.melody) {
+    if (!o.parts) {
       toast('Chords exported. Turn on Melody to export a melody file too.');
       return;
     }
     // One file per part, so each voice can go to its own instrument. Downloads are spaced out
     // because browsers drop or merge several downloads fired in the same instant.
-    const parts = melodyParts();
-    const files = [{ name: 'Melody', file: '-melody.mid', notes: parts.line, vel: 96 }]
-      .concat(parts.voices.map((v, k) => ({ name: 'Harmony ' + (k + 1), file: '-harmony-' + (k + 1) + '.mid', notes: v, vel: 84 })));
+    const files = [{ name: 'Melody', file: '-melody.mid', notes: o.parts.line, vel: 96 }]
+      .concat(o.parts.voices.map((v, k) => ({ name: 'Harmony ' + (k + 1), file: '-harmony-' + (k + 1) + '.mid', notes: v, vel: 84 })));
     files.forEach((f, i) => {
       setTimeout(() => download(M.write({
-        bpm: state.bpm,
-        title: title + ' (' + f.name.toLowerCase() + ')',
+        bpm: o.bpm,
+        title: o.title + ' (' + f.name.toLowerCase() + ')',
         tracks: [{ name: f.name, channel: 2, program: 0, notes: f.notes.map((n) => Object.assign({ vel: f.vel }, n)) }],
-      }), fileSlug() + f.file), 400 * (i + 1));
+      }), o.slug + f.file), 400 * (i + 1));
     });
-    const total = files.length + 1;
-    toast('Exporting ' + total + ' MIDI files: chords, melody' + (parts.voices.length ? ' and ' + parts.voices.length + ' harmon' + (parts.voices.length > 1 ? 'ies' : 'y') : '') +
+    const n = o.parts.voices.length;
+    toast('Exporting ' + (files.length + 1) + ' MIDI files: chords, melody' + (n ? ' and ' + n + ' harmon' + (n > 1 ? 'ies' : 'y') : '') +
       '. If your browser asks, allow multiple downloads.');
+  }
+
+  function exportMidi() {
+    const ids = prog();
+    if (!ids.length) return;
+    const chords = ids.map(realize);
+    exportParts({
+      slug: fileSlug(), bpm: state.bpm, beats: state.beats, chords,
+      title: key() + ' ' + state.mode + ': ' + chords.map((r) => r.symbol).join(' '),
+      parts: state.melody ? melodyParts() : null,
+    });
   }
 
   $('#midiBtn').addEventListener('click', exportMidi);
@@ -887,12 +896,8 @@
       $('[data-shape="' + s.dataset.shape + '"]', detailBody).focus();
       return;
     }
-    if (e.target.closest('#hearScale')) {
-      const sc = T.chordScale(state.mode, key(), ui.selected.id, state.sevenths);
-      const start = 60 + sc.root.pc - (sc.root.pc > 6 ? 12 : 0);
-      const line = sc.notes.map((nt) => { let m = start + T.mod(nt.pc - sc.root.pc, 12); return m; });
-      line.push(start + 12);
-      A.playLine(line, 0.2);
+    if (e.target.closest('[data-hear-scale]')) {
+      playScale(T.chordScale(state.mode, key(), ui.selected.id, state.sevenths));
       return;
     }
     const add = e.target.closest('[data-add]');
@@ -910,7 +915,15 @@
     return nameOf;
   }
 
-  function shapeSection(r, v, shapes) {
+  function playScale(sc) {
+    const start = 60 + sc.root.pc - (sc.root.pc > 6 ? 12 : 0);
+    const line = sc.notes.map((nt) => start + T.mod(nt.pc - sc.root.pc, 12));
+    line.push(start + 12);
+    A.playLine(line, 0.2);
+  }
+
+  function shapeSection(r, v, shapes, idx) {
+    if (idx == null) idx = ui.shape;
     const nameOf = nameMap(r);
     if (state.instrument === 'piano') {
       const on = new Set(v.upper);
@@ -922,12 +935,12 @@
     }
     const instName = T.TUNINGS[state.instrument].name;
     if (!shapes.length) return '<div class="inst"><p class="eyebrow">' + instName + '</p><p class="muted">No comfortable shape found.</p></div>';
-    const shape = shapes[ui.shape];
+    const shape = shapes[idx] || shapes[0];
     const tab = shape.frets.map((f) => (f < 0 ? 'x' : f)).join(' ');
     return '<div class="inst inst-guitar"><div class="inst-head"><p class="eyebrow">' + instName + ' shape</p>' +
       (shapes.length > 1
         ? '<div class="shape-nav"><button type="button" class="btn btn-quiet btn-tiny" data-shape="-1" aria-label="Previous shape">‹</button>' +
-          '<span class="shape-count">' + (ui.shape + 1) + ' of ' + shapes.length + '</span>' +
+          '<span class="shape-count">' + (idx + 1) + ' of ' + shapes.length + '</span>' +
           '<button type="button" class="btn btn-quiet btn-tiny" data-shape="1" aria-label="Next shape">›</button></div>'
         : '') +
       '</div><div class="guitar-wrap">' + I.chordBox(shape, r.root.pc, nameOf, state.instrument) + '<p class="tab">' + esc(tab) + '</p></div></div>';
@@ -957,7 +970,7 @@
 
   function scaleSection(sc, r) {
     return '<div class="inst"><div class="inst-head"><p class="eyebrow">Play over it</p>' +
-      '<button type="button" class="btn btn-quiet btn-small" id="hearScale">Hear the scale</button></div>' +
+      '<button type="button" class="btn btn-quiet btn-small" data-hear-scale>Hear the scale</button></div>' +
       '<p class="scale-name">' + fmtNote(sc.name) + '</p>' +
       '<p class="scale-why">' + esc(sc.why.charAt(0).toUpperCase() + sc.why.slice(1)) + '. ' +
         fmtNote(sc.notes.map((n) => n.name).join(' ')) + '</p>' +
@@ -1170,7 +1183,7 @@
   // Shared with blues.js and scales.js.
   window.Changes = {
     state, persist, toast, download, esc, fmtNote, chordHTML, stripHTML, placeMarker, bindStrip,
-    scaleMark, nameMap, registerView,
+    scaleMark, nameMap, registerView, exportParts, shapeSection, scaleSection, playScale, showView: (v) => showView(v),
     onInstrument: (fn) => instListeners.push(fn),
   };
 
@@ -1189,6 +1202,16 @@
   function readHash() {
     const code = decodeURIComponent(location.hash.replace(/^#/, ''));
     if (!code) return;
+    if (code.indexOf('sketch=') === 0) {
+      // Sketchpad links carry plain chord symbols: #sketch=Em,A7,D
+      history.replaceState(null, '', location.pathname + location.search);
+      state.sketch.chords = code.slice(7).split(',').filter((t) => T.parseChord(t)).slice(0, 64);
+      state.sketch.key = 'auto';
+      state.view = 'sketch';
+      persist();
+      setTimeout(() => toast('Loaded shared chords into the Sketchpad.'), 300);
+      return;
+    }
     const shared = T.decodeShare(code);
     history.replaceState(null, '', location.pathname + location.search);
     if (!shared) {

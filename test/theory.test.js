@@ -374,5 +374,54 @@
     eq(T.parallelKey('major', 'D♭', 'minor'), 'C♯');
   });
 
+  // ---------- sketchpad ----------
+
+  test('parse chord symbols, spelled by letter', () => {
+    const sym = (t) => { const c = T.parseChord(t); return c && c.symbol + ' ' + c.tones.map((n) => n.name).join(' '); };
+    eq(sym('Em'), 'Em E G B');
+    eq(sym('A7'), 'A7 A C♯ E G');
+    eq(sym('Bbmaj7'), 'B♭maj7 B♭ D F A');
+    eq(sym('F#m7b5'), 'F♯m7♭5 F♯ A C E');
+    eq(sym('G/B'), 'G/B G B D');
+    eq(sym('Cm(maj7)'), 'Cm(maj7) C E♭ G B');
+    eq(sym('Dsus4'), 'Dsus4 D G A');
+    eq(sym('Eb9'), 'E♭9 E♭ G B♭ D♭ F');
+    eq(sym('CM7'), 'Cmaj7 C E G B');
+    eq(sym('Cm7'), 'Cm7 C E♭ G B♭');
+    eq(T.parseChord('H7'), null);
+    eq(T.parseChord('Cwhatever'), null);
+    eq(T.parseChords('Em, A7 | Dmaj7 Xq').bad, ['Xq']);
+  });
+
+  test('key detection: Em A7 is D major, Am F C G is C or A minor, ii V I in Bb', () => {
+    const key = (t) => { const k = T.detectKey(T.parseChords(t).chords); return k.tonic + ' ' + k.mode; };
+    eq(key('Em A7'), 'D major');
+    eq(key('Em A7 D'), 'D major');
+    eq(key('Cm7 F7 Bbmaj7'), 'B♭ major');
+    eq(key('Am Dm E7 Am'), 'A minor');
+    ok(['C major', 'A minor'].indexOf(key('Am F C G')) > -1);
+  });
+
+  test('analysis: ii V I, a secondary dominant, a borrowed chord', () => {
+    const an = (t, tonic, mode) => T.parseChords(t).chords.map((c) => { const a = T.analyzeChord(c, { tonic, mode }); return a.numeral + ':' + a.role; });
+    eq(an('Em7 A7 Dmaj7', 'D', 'major'), ['ii7:diatonic', 'V7:diatonic', 'Imaj7:diatonic']);
+    eq(an('Em A7', 'G', 'major'), ['vi:diatonic', 'V7/V:secondary']);
+    eq(an('E7 Am', 'C', 'major'), ['V7/vi:secondary', 'vi:diatonic']);
+    eq(an('Fm Ab', 'C', 'major'), ['iv:borrowed', '♭VI:borrowed']);
+    eq(an('Db', 'C', 'major'), ['♭II:chromatic']);
+    eq(an('Fm6 Gsus4', 'C', 'major'), ['iv6:borrowed', 'Vsus4:diatonic']);
+  });
+
+  test('every chord type gets a scale that holds all its tones', () => {
+    T.CHORD_TYPES.forEach((t) => {
+      const c = T.parseChord('C' + t.aliases[0]);
+      ok(c, 'could not parse C' + t.aliases[0]);
+      const sc = T.freeScale(c, { tonic: 'F', mode: 'major' });
+      c.pcs.forEach((pc) => ok(sc.pcs.indexOf(pc) > -1, sc.name + ' misses a tone of ' + c.symbol));
+    });
+    eq(T.freeScale(T.parseChord('Em'), { tonic: 'D', mode: 'major' }).name, 'E Dorian');
+    eq(T.freeScale(T.parseChord('A7'), { tonic: 'D', mode: 'major' }).name, 'A Mixolydian');
+  });
+
   root.__testResults = results;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

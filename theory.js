@@ -722,11 +722,214 @@
     return voices;
   }
 
+  // ---------- free chords (the Sketchpad) ----------
+  // Any chord symbol, spelled by letter so the notes read correctly: [semitones, letter steps].
+
+  const CHORD_TYPES = [
+    { id: 'maj',   sym: '',        name: 'major triad',             aliases: ['', 'maj', 'M', 'major'],            tones: [[0, 0], [4, 2], [7, 4]] },
+    { id: 'min',   sym: 'm',       name: 'minor triad',             aliases: ['m', 'min', '-', 'minor'],           tones: [[0, 0], [3, 2], [7, 4]] },
+    { id: 'dim',   sym: '°',       name: 'diminished triad',        aliases: ['dim', '°', 'o'],                    tones: [[0, 0], [3, 2], [6, 4]] },
+    { id: 'aug',   sym: '+',       name: 'augmented triad',         aliases: ['aug', '+', '#5'],                   tones: [[0, 0], [4, 2], [8, 4]] },
+    { id: 'sus2',  sym: 'sus2',    name: 'suspended 2nd',           aliases: ['sus2'],                             tones: [[0, 0], [2, 1], [7, 4]] },
+    { id: 'sus4',  sym: 'sus4',    name: 'suspended 4th',           aliases: ['sus4', 'sus'],                      tones: [[0, 0], [5, 3], [7, 4]] },
+    { id: '6',     sym: '6',       name: 'major sixth',             aliases: ['6', 'maj6', 'M6'],                  tones: [[0, 0], [4, 2], [7, 4], [9, 5]] },
+    { id: 'm6',    sym: 'm6',      name: 'minor sixth',             aliases: ['m6', 'min6', '-6'],                 tones: [[0, 0], [3, 2], [7, 4], [9, 5]] },
+    { id: '7',     sym: '7',       name: 'dominant seventh',        aliases: ['7', 'dom7', 'dom'],                 tones: [[0, 0], [4, 2], [7, 4], [10, 6]] },
+    { id: 'maj7',  sym: 'maj7',    name: 'major seventh',           aliases: ['maj7', 'M7', 'Δ', 'Δ7', 'ma7', 'j7'], tones: [[0, 0], [4, 2], [7, 4], [11, 6]] },
+    { id: 'm7',    sym: 'm7',      name: 'minor seventh',           aliases: ['m7', 'min7', '-7', 'mi7'],          tones: [[0, 0], [3, 2], [7, 4], [10, 6]] },
+    { id: 'm7b5',  sym: 'm7♭5',    name: 'half-diminished seventh', aliases: ['m7b5', 'ø', 'ø7', '-7b5', 'min7b5'], tones: [[0, 0], [3, 2], [6, 4], [10, 6]] },
+    { id: 'dim7',  sym: '°7',      name: 'diminished seventh',      aliases: ['dim7', '°7', 'o7'],                 tones: [[0, 0], [3, 2], [6, 4], [9, 6]] },
+    { id: 'mMaj7', sym: 'm(maj7)', name: 'minor major seventh',     aliases: ['mmaj7', 'mM7', 'm(maj7)', '-maj7', 'minmaj7', 'mΔ7'], tones: [[0, 0], [3, 2], [7, 4], [11, 6]] },
+    { id: '7sus4', sym: '7sus4',   name: 'dominant 7 suspended',    aliases: ['7sus4', '7sus'],                    tones: [[0, 0], [5, 3], [7, 4], [10, 6]] },
+    { id: '7#5',   sym: '7♯5',     name: 'augmented seventh',       aliases: ['7#5', '+7', 'aug7'],                tones: [[0, 0], [4, 2], [8, 4], [10, 6]] },
+    { id: 'add9',  sym: 'add9',    name: 'major add 9',             aliases: ['add9', 'add2'],                     tones: [[0, 0], [4, 2], [7, 4], [14, 1]] },
+    { id: 'madd9', sym: 'm(add9)', name: 'minor add 9',             aliases: ['madd9', 'm(add9)', 'madd2'],        tones: [[0, 0], [3, 2], [7, 4], [14, 1]] },
+    { id: '9',     sym: '9',       name: 'dominant ninth',          aliases: ['9'],                                tones: [[0, 0], [4, 2], [7, 4], [10, 6], [14, 1]] },
+    { id: 'maj9',  sym: 'maj9',    name: 'major ninth',             aliases: ['maj9', 'M9', 'Δ9'],                 tones: [[0, 0], [4, 2], [7, 4], [11, 6], [14, 1]] },
+    { id: 'm9',    sym: 'm9',      name: 'minor ninth',             aliases: ['m9', 'min9', '-9'],                 tones: [[0, 0], [3, 2], [7, 4], [10, 6], [14, 1]] },
+    { id: '7b9',   sym: '7♭9',     name: 'dominant 7 flat 9',       aliases: ['7b9'],                              tones: [[0, 0], [4, 2], [7, 4], [10, 6], [13, 1]] },
+    { id: '7#9',   sym: '7♯9',     name: 'dominant 7 sharp 9',      aliases: ['7#9'],                              tones: [[0, 0], [4, 2], [7, 4], [10, 6], [15, 1]] },
+    { id: '13',    sym: '13',      name: 'dominant thirteenth',     aliases: ['13'],                               tones: [[0, 0], [4, 2], [10, 6], [21, 5]] },
+  ];
+  const TYPE_EXACT = {};
+  const TYPE_LOOSE = {};
+  CHORD_TYPES.forEach((t) => t.aliases.forEach((a) => {
+    TYPE_EXACT[a] = t;
+    if (a.length > 1) TYPE_LOOSE[a.toLowerCase()] = t;
+  }));
+
+  const ACC_IN = { '': 0, '#': 1, '♯': 1, 'b': -1, '♭': -1 };
+
+  // "Em", "A7", "Bbmaj7", "F#m7b5", "G/B", "Cm(maj7)" -> a chord object, or null.
+  function parseChord(text) {
+    const m = /^\s*([A-Ga-g])([#b♯♭]?)(.*?)(?:\/([A-Ga-g])([#b♯♭]?))?\s*$/.exec(String(text || ''));
+    if (!m) return null;
+    let q = m[3].replace(/♭/g, 'b').replace(/♯/g, '#').replace(/\s+/g, '');
+    let type = TYPE_EXACT[q] || TYPE_EXACT[q.replace(/[()]/g, '')] || TYPE_LOOSE[q.toLowerCase()] || TYPE_LOOSE[q.replace(/[()]/g, '').toLowerCase()];
+    if (!type) return null;
+    const letter = LETTERS.indexOf(m[1].toUpperCase());
+    const rootN = makeNote(letter, NATURAL_PC[letter] + ACC_IN[m[2]]);
+    const tones = type.tones.map(([semi, step]) => tidy(makeNote(letter + step, rootN.pc + semi), false));
+    let bass = rootN;
+    if (m[4]) {
+      const bl = LETTERS.indexOf(m[4].toUpperCase());
+      bass = makeNote(bl, NATURAL_PC[bl] + ACC_IN[m[5]]);
+    }
+    const pcs = [];
+    tones.forEach((t) => { if (pcs.indexOf(t.pc) < 0) pcs.push(t.pc); });
+    const slash = bass.pc !== rootN.pc;
+    return {
+      id: rootN.name + type.id + (slash ? '/' + bass.name : ''),
+      type: type.id, root: rootN, bass, slash, tones, pcs,
+      sym: type.sym, qualityName: type.name,
+      symbol: rootN.name + type.sym + (slash ? '/' + bass.name : ''),
+      third: pcs.indexOf(mod(rootN.pc + 4, 12)) > -1 ? 'major' : pcs.indexOf(mod(rootN.pc + 3, 12)) > -1 ? 'minor' : 'none',
+    };
+  }
+
+  function parseChords(text) {
+    const out = [];
+    const bad = [];
+    String(text || '').split(/[\s,|]+/).filter(Boolean).forEach((tok) => {
+      const c = parseChord(tok);
+      if (c) out.push(c); else bad.push(tok);
+    });
+    return { chords: out, bad };
+  }
+
+  // Keys are { tonic: name, mode: 'major' | 'minor' }. Minor counts both the natural
+  // and the raised 7th, since V7 in minor borrows it.
+  function keyScalePcs(k) {
+    const t = parseKey(k.tonic).pc;
+    const steps = k.mode === 'major' ? SCALES.major.steps : SCALES.natMinor.steps.concat([11]);
+    return steps.map((st) => mod(t + st, 12));
+  }
+
+  function detectKey(chords) {
+    if (!chords.length) return { tonic: 'C', mode: 'major' };
+    let best = null;
+    ['major', 'minor'].forEach((mode) => {
+      KEY_NAMES[mode].forEach((tonic) => {
+        const k = { tonic, mode };
+        const sc = keyScalePcs(k);
+        const t = parseKey(tonic).pc;
+        const isTonic = (c) => c.root.pc === t && c.third === (mode === 'major' ? 'major' : 'minor');
+        let score = 0;
+        chords.forEach((c) => {
+          const fit = c.pcs.filter((pc) => sc.indexOf(pc) > -1).length / c.pcs.length;
+          score += fit * fit;
+          if (c.root.pc === mod(t + 7, 12) && c.third === 'major') score += 0.3; // a real V
+        });
+        if (chords.some(isTonic)) score += 0.3;
+        if (isTonic(chords[0])) score += 0.3;
+        if (isTonic(chords[chords.length - 1])) score += 0.6;
+        if (mode === 'minor') score -= 0.05; // tie goes to major
+        if (!best || score > best.score + 1e-9) best = { tonic, mode, score };
+      });
+    });
+    return { tonic: best.tonic, mode: best.mode };
+  }
+
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+  function numeralFor(c, tonicNote) {
+    const deg = mod(c.root.letter - tonicNote.letter, 7);
+    const acc = mod(mod(c.root.pc - tonicNote.pc, 12) - MAJOR_STEPS[deg] + 6, 12) - 6;
+    let n = ROMAN[deg];
+    if (c.third === 'minor' || c.type === 'dim' || c.type === 'dim7' || c.type === 'm7b5') n = n.toLowerCase();
+    const suffix = { dim: '°', dim7: '°7', m7b5: 'ø7', aug: '+', '7#5': '+7', maj7: 'maj7', mMaj7: '(maj7)', maj9: 'maj9',
+      '6': '6', m6: '6', sus2: 'sus2', sus4: 'sus4', '7sus4': '7sus4', add9: 'add9', madd9: 'add9' }[c.type] ||
+      (['7', 'm7', '9', 'm9', '13', '7b9', '7#9', '7sus4'].indexOf(c.type) > -1 ? (c.type.indexOf('9') > -1 ? '9' : c.type === '13' ? '13' : '7') : '');
+    return (acc < 0 ? '♭'.repeat(-acc) : '♯'.repeat(acc)) + n + suffix;
+  }
+
+  // What a chord is doing in a key: diatonic, a secondary dominant, borrowed, or chromatic.
+  function analyzeChord(c, k) {
+    const tonic = parseKey(k.tonic);
+    const sc = keyScalePcs(k);
+    const inKey = c.pcs.every((pc) => sc.indexOf(pc) > -1);
+    const num = numeralFor(c, tonic);
+    if (inKey) {
+      const tonicChord = c.root.pc === tonic.pc;
+      return { numeral: num, role: 'diatonic', text: tonicChord ? 'Home: the tonic chord.' : 'In the key.' };
+    }
+    // A major chord or dominant a fifth above a chord of the key: a secondary dominant.
+    if (c.third === 'major' && ['maj', '7', '9', '13', '7b9', '7#9'].indexOf(c.type) > -1) {
+      const targetPc = mod(c.root.pc - 7, 12);
+      if (targetPc !== tonic.pc && sc.indexOf(targetPc) > -1) {
+        const target = makeNote(c.root.letter - 4, targetPc);
+        const steps = k.mode === 'major' ? SCALES.major.steps : SCALES.natMinor.steps;
+        const deg = mod(target.letter - tonic.letter, 7);
+        // The target's own third, measured inside the key, says whether it is a minor chord.
+        const minorTarget = mod(tonic.pc + steps[mod(deg + 2, 7)] - target.pc, 12) === 3;
+        let tn = ROMAN[deg];
+        if (minorTarget) tn = tn.toLowerCase();
+        return { numeral: 'V' + (c.type === 'maj' ? '' : '7') + '/' + tn, role: 'secondary', text: 'Secondary dominant: it points at ' + target.name + '.' };
+      }
+    }
+    const other = { tonic: k.tonic, mode: k.mode === 'major' ? 'minor' : 'major' };
+    const osc = keyScalePcs(other);
+    if (c.pcs.every((pc) => osc.indexOf(pc) > -1)) {
+      return { numeral: num, role: 'borrowed', text: 'Borrowed from ' + k.tonic + ' ' + other.mode + '.' };
+    }
+    return { numeral: num, role: 'chromatic', text: 'Outside the key: a chromatic color.' };
+  }
+
+  // A scale to play over a free chord: the key's own mode when it fits, otherwise the best match.
+  const SCALE_PREFS = {
+    maj: ['Ionian', 'Lydian', 'Mixolydian'], '6': ['Ionian', 'Lydian'], add9: ['Ionian', 'Lydian'], maj7: ['Ionian', 'Lydian'], maj9: ['Ionian', 'Lydian'],
+    min: ['Dorian', 'Aeolian', 'Phrygian'], m6: ['Dorian', 'Melodic minor'], madd9: ['Aeolian', 'Dorian'], m7: ['Dorian', 'Aeolian', 'Phrygian'], m9: ['Dorian', 'Aeolian'],
+    '7': ['Mixolydian', 'Lydian dominant'], '9': ['Mixolydian', 'Lydian dominant'], '13': ['Mixolydian'], '7sus4': ['Mixolydian'],
+    '7b9': ['Phrygian dominant', 'Diminished (half-whole)'], '7#9': ['Diminished (half-whole)', 'Altered'], '7#5': ['Altered', 'Whole tone'],
+    m7b5: ['Locrian', 'Locrian ♮2'], dim: ['Diminished (whole-half)', 'Locrian'], dim7: ['Diminished (whole-half)'],
+    aug: ['Lydian augmented', 'Whole tone'], mMaj7: ['Melodic minor', 'Harmonic minor'], sus2: ['Mixolydian', 'Ionian'], sus4: ['Mixolydian', 'Ionian'],
+  };
+
+  function freeScale(c, k) {
+    const cands = [];
+    ['major', 'melMinor', 'harmMinor'].forEach((p) => { for (let i = 0; i < 7; i++) cands.push(rotate(p, i)); });
+    cands.push({ steps: SCALES.dimWH.steps, letters: SCALES.dimWH.letters, name: 'Diminished (whole-half)' });
+    cands.push({ steps: [0, 1, 3, 4, 6, 7, 9, 10], letters: [0, 1, 1, 2, 3, 4, 5, 6], name: 'Diminished (half-whole)' });
+    cands.push({ steps: [0, 2, 4, 6, 8, 10], letters: [0, 1, 2, 3, 4, 6], name: 'Whole tone' });
+    const fits = (spec) => c.pcs.every((pc) => spec.steps.indexOf(mod(pc - c.root.pc, 12)) > -1);
+    let pick = null;
+    let why = '';
+    // 1. The key itself, if the chord lives in it.
+    if (k) {
+      const keyMode = k.mode === 'major' ? 'major' : 'natMinor';
+      const kPcs = (k.mode === 'major' ? SCALES.major.steps : SCALES.natMinor.steps).map((st) => mod(parseKey(k.tonic).pc + st, 12));
+      const idx = kPcs.indexOf(c.root.pc);
+      if (idx > -1 && c.pcs.every((pc) => kPcs.indexOf(pc) > -1)) {
+        pick = rotate(keyMode, idx);
+        why = 'its own mode in ' + k.tonic + ' ' + k.mode;
+      } else if (k.mode === 'minor') {
+        const hPcs = SCALES.harmMinor.steps.map((st) => mod(parseKey(k.tonic).pc + st, 12));
+        const hi = hPcs.indexOf(c.root.pc);
+        if (hi > -1 && c.pcs.every((pc) => hPcs.indexOf(pc) > -1)) { pick = rotate('harmMinor', hi); why = 'from ' + k.tonic + ' harmonic minor'; }
+      }
+    }
+    // 2. The usual choice for this chord type.
+    if (!pick) {
+      const prefs = SCALE_PREFS[c.type] || [];
+      for (const name of prefs) {
+        const s = cands.find((x) => x.name === name && fits(x));
+        if (s) { pick = s; why = 'the usual color for a ' + c.qualityName; break; }
+      }
+    }
+    // 3. Anything that holds every chord tone.
+    if (!pick) { pick = cands.find(fits) || rotate('major', 0); why = 'it holds every chord tone'; }
+    const out = buildScale(c.root, pick, pick.name);
+    out.why = why;
+    out.chordPcs = c.pcs;
+    return out;
+  }
+
   root.Theory = {
     LETTERS, KEY_NAMES, QUALITIES, MODES, EXAMPLES, GUITAR_OPEN, TUNINGS, SCALES, BLUES,
     mod, makeNote, simplify, tidy, parseKey, keyId, keyFromId, parallelKey,
     realize, nextOptions, validate, encodeShare, decodeShare, flipProgression,
     voiceChord, voiceProgression, guitarVoicings, fretVoicings,
     degreeLabel, rotate, buildScale, chordScale, harmonize, realizeBlues, melody, harmonyVoices,
+    CHORD_TYPES, parseChord, parseChords, detectKey, analyzeChord, freeScale,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
