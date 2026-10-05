@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changes · tests</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #1C1B1A; color: #EDE4D3; font: 14px/1.5 ui-monospace, Menlo, monospace; }
+    h1 { font: 600 20px Georgia, serif; margin: 0 0 16px; }
+    .pass { color: #9BC48A; } .fail { color: #E07A55; }
+    li { margin: 2px 0; } .err { color: #BDB2A0; margin-left: 2ch; }
+  </style>
+</head>
+<body>
+  <h1 id="sum">Running…</h1>
+  <ul id="out"></ul>
+  <script src="../theory.js"></script>
+  <script src="theory.test.js"></script>
+  <script>
+    const r = window.__testResults;
+    const failed = r.filter((t) => !t.ok).length;
+    document.getElementById('sum').textContent = (r.length - failed) + ' / ' + r.length + ' passed';
+    document.getElementById('sum').className = failed ? 'fail' : 'pass';
+    document.getElementById('out').innerHTML = r.map((t) =>
+      '<li class="' + (t.ok ? 'pass' : 'fail') + '">' + (t.ok ? 'pass ' : 'FAIL ') + t.name +
+      (t.ok ? '' : '<div class="err">' + t.err.replace(/</g, '&lt;') + '</div>') + '</li>').join('');
+  </script>
+</body>
+</html>
