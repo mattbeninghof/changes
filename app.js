@@ -35,7 +35,16 @@
     bpm: clamp(Number(stored.bpm) || 84, 50, 160),
     beats: [1, 2, 4].indexOf(Number(stored.beats)) > -1 ? Number(stored.beats) : 4,
     loop: !!stored.loop,
+    melody: !!stored.melody,
+    harmonies: Math.max(0, Math.min(5, Number(stored.harmonies) || 0)),
+    instrument: ['guitar', 'piano', 'ukulele'].indexOf(stored.instrument) > -1 ? stored.instrument : 'guitar',
+    view: ['progressions', 'dark', 'blues', 'scales'].indexOf(stored.view) > -1 ? stored.view : 'progressions',
+    blues: stored.blues || {},
+    scales: stored.scales || {},
   };
+  // Progressions is the major-key card, Dark harmony the minor-key card.
+  if (state.view === 'progressions') state.mode = 'major';
+  if (state.view === 'dark') state.mode = 'minor';
   ['major', 'minor'].forEach((m) => {
     if (stored.keys && T.KEY_NAMES[m].indexOf(stored.keys[m]) > -1) state.keys[m] = stored.keys[m];
     if (stored.progs && Array.isArray(stored.progs[m])) {
@@ -59,7 +68,8 @@
     writeJSON(PREFS_KEY, {
       mode: state.mode, keys: state.keys, progs: state.progs,
       sevenths: state.sevenths, guided: state.guided,
-      bpm: state.bpm, beats: state.beats, loop: state.loop,
+      bpm: state.bpm, beats: state.beats, loop: state.loop, melody: state.melody, harmonies: state.harmonies,
+      instrument: state.instrument, view: state.view, blues: state.blues, scales: state.scales,
     });
   }
 
@@ -90,28 +100,67 @@
 
   // ---------- header: mode + keys + toggles ----------
 
-  const modeSwitch = $('#modeSwitch');
   const keyStrip = $('#keyStrip');
   const keyNow = $('#keyNow');
   const optSevenths = $('#optSevenths');
   const optGuided = $('#optGuided');
 
+  const MODE_COPY = {
+    major: { title: 'Progressions', sub: 'Major keys. Start in the middle row, then step up to secondary dominants or down to borrowed chords.' },
+    minor: { title: 'Dark harmony', sub: 'Minor keys. Harmonic-minor chords, secondary diminished chords and the Neapolitan sixth.' },
+  };
+
   function renderMode() {
-    modeSwitch.querySelectorAll('.mode-btn').forEach((b) => {
-      const on = b.dataset.mode === state.mode;
-      b.setAttribute('aria-checked', String(on));
-      b.tabIndex = on ? 0 : -1;
-    });
+    $('#progTitleMain').textContent = MODE_COPY[state.mode].title;
+    $('#progSub').textContent = MODE_COPY[state.mode].sub;
     document.documentElement.dataset.mode = state.mode;
+  }
+
+  // A key strip is a row of radio buttons with a sliding amber marker. Every view uses one.
+  function stripHTML(names, cur, suffix) {
+    return names.map((k) => {
+      const on = k === cur;
+      return '<button class="key" role="radio" aria-checked="' + on + '" tabindex="' + (on ? 0 : -1) +
+        '" data-key="' + esc(k) + '" aria-label="' + esc(k + (suffix ? ' ' + suffix : '')) + '">' + fmtNote(k) + '</button>';
+    }).join('') + '<span class="key-marker" aria-hidden="true"></span>';
+  }
+
+  function placeMarker(strip) {
+    const marker = $('.key-marker', strip);
+    const on = $('[aria-checked="true"]', strip);
+    if (!marker || !on || !strip.offsetWidth) return;
+    marker.style.width = on.offsetWidth + 'px';
+    marker.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+    // Slide only after the first placement, so the page never loads mid-animation.
+    if (!strip.classList.contains('is-ready')) requestAnimationFrame(() => strip.classList.add('is-ready'));
+  }
+
+  // Click and arrow-key handling for a strip. getNames/getCur are read live; set(name) applies a pick.
+  function bindStrip(strip, getNames, getCur, set) {
+    strip.addEventListener('click', (e) => {
+      const b = e.target.closest('.key');
+      if (b) set(b.dataset.key);
+    });
+    strip.addEventListener('keydown', (e) => {
+      const names = getNames();
+      const i = names.indexOf(getCur());
+      const n = names.length;
+      let j = null;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') j = (i + 1) % n;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') j = (i + n - 1) % n;
+      if (e.key === 'Home') j = 0;
+      if (e.key === 'End') j = n - 1;
+      if (j === null) return;
+      e.preventDefault();
+      set(names[j]);
+      const on = $('[aria-checked="true"]', strip);
+      if (on) on.focus();
+    });
   }
 
   function renderKeys() {
     const names = T.KEY_NAMES[state.mode];
-    keyStrip.innerHTML = names.map((k) => {
-      const on = k === key();
-      return '<button class="key" role="radio" aria-checked="' + on + '" tabindex="' + (on ? 0 : -1) +
-        '" data-key="' + esc(k) + '" aria-label="' + esc(k) + ' ' + state.mode + '">' + fmtNote(k) + '</button>';
-    }).join('') + '<span class="key-marker" aria-hidden="true"></span>';
+    keyStrip.innerHTML = stripHTML(names, key(), state.mode);
     const other = state.mode === 'major' ? 'minor' : 'major';
     const tonicPc = T.parseKey(key()).pc;
     const relPc = state.mode === 'major' ? (tonicPc + 9) % 12 : (tonicPc + 3) % 12;
@@ -121,32 +170,18 @@
     placeKeyMarker();
   }
 
-  function placeKeyMarker() {
-    const marker = $('.key-marker', keyStrip);
-    const on = $('[aria-checked="true"]', keyStrip);
-    if (!marker || !on) return;
-    marker.style.width = on.offsetWidth + 'px';
-    marker.style.transform = 'translateX(' + on.offsetLeft + 'px)';
-    // Slide only after the first placement, so the page never loads mid-animation.
-    if (!keyStrip.classList.contains('is-ready')) requestAnimationFrame(() => keyStrip.classList.add('is-ready'));
-  }
+  function placeKeyMarker() { placeMarker(keyStrip); }
 
   function renderToggles() {
     optSevenths.setAttribute('aria-pressed', String(state.sevenths));
     optGuided.setAttribute('aria-pressed', String(state.guided));
     $('#loopBtn').setAttribute('aria-pressed', String(state.loop));
+    $('#melodyBtn').setAttribute('aria-pressed', String(state.melody));
+    const harm = $('#harmonies');
+    harm.value = String(state.harmonies);
+    harm.disabled = !state.melody;
+    harm.closest('.field').classList.toggle('is-off', !state.melody);
   }
-
-  modeSwitch.addEventListener('click', (e) => {
-    const b = e.target.closest('.mode-btn');
-    if (b && b.dataset.mode !== state.mode) setMode(b.dataset.mode);
-  });
-  modeSwitch.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    e.preventDefault();
-    setMode(state.mode === 'major' ? 'minor' : 'major');
-    $('[aria-checked="true"]', modeSwitch).focus();
-  });
 
   function setMode(m) {
     stopPlayback();
@@ -157,23 +192,7 @@
     renderAll();
   }
 
-  keyStrip.addEventListener('click', (e) => {
-    const b = e.target.closest('.key');
-    if (b) setKey(b.dataset.key);
-  });
-  keyStrip.addEventListener('keydown', (e) => {
-    const names = T.KEY_NAMES[state.mode];
-    const i = names.indexOf(key());
-    let n = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') n = (i + 1) % 12;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') n = (i + 11) % 12;
-    if (e.key === 'Home') n = 0;
-    if (e.key === 'End') n = 11;
-    if (n === null) return;
-    e.preventDefault();
-    setKey(names[n]);
-    $('[aria-checked="true"]', keyStrip).focus();
-  });
+  bindStrip(keyStrip, () => T.KEY_NAMES[state.mode], key, setKey);
 
   function setKey(k) {
     if (k === key()) return;
@@ -419,6 +438,7 @@
     $('#playBtn').disabled = empty;
     $('#saveBtn').disabled = empty;
     $('#shareBtn').disabled = empty;
+    $('#midiBtn').disabled = empty;
     if (empty) renderExamples();
     if (scrollToEnd && progEl.lastElementChild) {
       progEl.lastElementChild.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -429,7 +449,9 @@
     $('#examples').innerHTML = T.EXAMPLES[state.mode].map((ex, i) => {
       const syms = ex.ids.map((id) => realize(id).symbol).join('  ');
       return '<button type="button" class="example" data-ex="' + i + '">' +
+        '<span class="example-step">Step ' + (i + 1) + '</span>' +
         '<span class="example-name">' + esc(ex.name) + '</span>' +
+        '<span class="example-text">' + esc(ex.text) + '</span>' +
         '<span class="example-chords">' + fmtNote(syms) + '</span></button>';
     }).join('');
   }
@@ -548,8 +570,28 @@
     runPass(ctx, ctx.currentTime + 0.08, my, voicings);
   }
 
+  // The same progression always sings the same line, so what you hear is what you export.
+  function melodyParts() {
+    const ids = prog();
+    const segs = ids.map((id) => {
+      const sc = T.chordScale(state.mode, key(), id, state.sevenths);
+      return { scalePcs: sc.pcs, chordPcs: sc.chordPcs, beats: state.beats };
+    });
+    let seed = ids.length * 31 + T.parseKey(key()).pc;
+    ids.join('').split('').forEach((c) => { seed = (seed * 33 + c.charCodeAt(0)) >>> 0; });
+    const line = T.melody(segs, seed);
+    return { line, voices: T.harmonyVoices(line, segs, state.harmonies) };
+  }
+
   function runPass(ctx, t0, my, voicings) {
     const dur = (60 / state.bpm) * state.beats;
+    if (state.melody) {
+      const spb = 60 / state.bpm;
+      const parts = melodyParts();
+      parts.line.forEach((n) => A.lead(n.midi, t0 + n.beat * spb, n.dur * spb));
+      // Harmony voices sit a little behind the lead and get softer the further down they go.
+      parts.voices.forEach((v, k) => v.forEach((n) => A.lead(n.midi, t0 + n.beat * spb, n.dur * spb, 0.07 - k * 0.008)));
+    }
     voicings.forEach((v, i) => {
       const at = t0 + i * dur;
       A.playChord(v, at, dur * 0.96, { strum: state.beats === 1 ? 0.008 : 0.02 });
@@ -620,6 +662,80 @@
     renderToggles();
   });
 
+  $('#melodyBtn').addEventListener('click', () => {
+    state.melody = !state.melody;
+    persist();
+    renderToggles();
+    if (ui.playing) startPlayback();
+    else if (state.melody && prog().length) toast('Melody on. Press Play to hear a line written over your chords.');
+  });
+
+  $('#harmonies').addEventListener('change', (e) => {
+    state.harmonies = Number(e.target.value);
+    persist();
+    if (ui.playing) startPlayback();
+  });
+
+  // ---------- MIDI export ----------
+
+  function fileSlug() {
+    const k = key().replace('♯', '-sharp').replace('♭', '-flat').toLowerCase();
+    return 'changes-' + k + '-' + state.mode;
+  }
+
+  function download(bytes, name) {
+    const blob = new Blob([bytes], { type: 'audio/midi' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  function exportMidi() {
+    const ids = prog();
+    if (!ids.length) return;
+    const M = window.MidiFile;
+    const b = state.beats;
+    const chords = ids.map(realize);
+    const title = key() + ' ' + state.mode + ': ' + chords.map((r) => r.symbol).join(' ');
+    const upper = [];
+    const bass = [];
+    T.voiceProgression(chords).forEach((v, i) => {
+      v.upper.forEach((m) => upper.push({ midi: m, beat: i * b, dur: b, vel: 78 }));
+      bass.push({ midi: v.bass, beat: i * b, dur: b, vel: 92 });
+    });
+    download(M.write({ bpm: state.bpm, title, tracks: [
+      { name: 'Chords', channel: 0, program: 4, notes: upper },
+      { name: 'Bass', channel: 1, program: 33, notes: bass },
+    ] }), fileSlug() + '-chords.mid');
+
+    if (!state.melody) {
+      toast('Chords exported. Turn on Melody to export a melody file too.');
+      return;
+    }
+    // One file per part, so each voice can go to its own instrument. Downloads are spaced out
+    // because browsers drop or merge several downloads fired in the same instant.
+    const parts = melodyParts();
+    const files = [{ name: 'Melody', file: '-melody.mid', notes: parts.line, vel: 96 }]
+      .concat(parts.voices.map((v, k) => ({ name: 'Harmony ' + (k + 1), file: '-harmony-' + (k + 1) + '.mid', notes: v, vel: 84 })));
+    files.forEach((f, i) => {
+      setTimeout(() => download(M.write({
+        bpm: state.bpm,
+        title: title + ' (' + f.name.toLowerCase() + ')',
+        tracks: [{ name: f.name, channel: 2, program: 0, notes: f.notes.map((n) => Object.assign({ vel: f.vel }, n)) }],
+      }), fileSlug() + f.file), 400 * (i + 1));
+    });
+    const total = files.length + 1;
+    toast('Exporting ' + total + ' MIDI files: chords, melody' + (parts.voices.length ? ' and ' + parts.voices.length + ' harmon' + (parts.voices.length > 1 ? 'ies' : 'y') : '') +
+      '. If your browser asks, allow multiple downloads.');
+  }
+
+  $('#midiBtn').addEventListener('click', exportMidi);
+
   // ---------- detail panel ----------
 
   const detailEmpty = $('#detailEmpty');
@@ -681,8 +797,9 @@
     if (!def) { ui.selected = null; renderDetail(); return; }
     const r = realize(id);
     const v = voicingFor(id, ui.selected.index);
-    const shapes = T.guitarVoicings(r.pcs, r.bass.pc);
+    const shapes = state.instrument === 'piano' ? [] : T.fretVoicings(r.pcs, r.bass.pc, state.instrument);
     if (ui.shape >= shapes.length) ui.shape = 0;
+    const sc = T.chordScale(state.mode, key(), id, state.sevenths);
     const next = T.nextOptions(state.mode, id).filter((x) => x !== id);
     const nextMain = def.group === 'main'
       ? null
@@ -704,14 +821,8 @@
       '<p class="detail-desc">' + describe(def, r) + '</p>' +
       '<ul class="notes" aria-label="Notes">' + r.tones.map((t) => '<li>' + fmtNote(t.name) + '</li>').join('') + '</ul>' +
       (nextMain ? '<div class="next"><p class="eyebrow">Goes to</p><div class="next-list">' + nextMain + '</div></div>' : '') +
-      '<div class="inst"><p class="eyebrow">Piano</p>' + pianoSVG(v, r) + '</div>' +
-      '<div class="inst inst-guitar"><div class="inst-head"><p class="eyebrow">Guitar</p>' +
-        (shapes.length > 1
-          ? '<div class="shape-nav"><button type="button" class="btn btn-quiet btn-tiny" data-shape="-1" aria-label="Previous shape">‹</button>' +
-            '<span class="shape-count">Shape ' + (ui.shape + 1) + ' of ' + shapes.length + '</span>' +
-            '<button type="button" class="btn btn-quiet btn-tiny" data-shape="1" aria-label="Next shape">›</button></div>'
-          : '') +
-      '</div>' + (shapes.length ? guitarSVG(shapes[ui.shape], r) : '<p class="muted">No comfortable shape found.</p>') + '</div>';
+      shapeSection(r, v, shapes) +
+      scaleSection(sc, r);
 
     if (!fromPlayback) {
       detailBody.classList.remove('is-fresh');
@@ -727,10 +838,19 @@
     }
     const s = e.target.closest('[data-shape]');
     if (s) {
-      const n = T.guitarVoicings(realize(ui.selected.id).pcs, realize(ui.selected.id).bass.pc).length;
+      const r = realize(ui.selected.id);
+      const n = T.fretVoicings(r.pcs, r.bass.pc, state.instrument).length;
       ui.shape = (ui.shape + Number(s.dataset.shape) + n) % n;
       renderDetail(true);
       $('[data-shape="' + s.dataset.shape + '"]', detailBody).focus();
+      return;
+    }
+    if (e.target.closest('#hearScale')) {
+      const sc = T.chordScale(state.mode, key(), ui.selected.id, state.sevenths);
+      const start = 60 + sc.root.pc - (sc.root.pc > 6 ? 12 : 0);
+      const line = sc.notes.map((nt) => { let m = start + T.mod(nt.pc - sc.root.pc, 12); return m; });
+      line.push(start + 12);
+      A.playLine(line, 0.2);
       return;
     }
     const add = e.target.closest('[data-add]');
@@ -739,85 +859,69 @@
 
   // ---------- instrument drawings ----------
 
-  function pianoSVG(v, r) {
-    const LO = 36;  // C2
-    const HI = 83;  // B5
-    const W = 14;
-    const isBlack = (m) => [1, 3, 6, 8, 10].indexOf(m % 12) > -1;
-    const sounding = new Set(v.upper.concat([v.bass]));
+  const I = window.Instruments;
+
+  function nameMap(r) {
     const nameOf = {};
     r.tones.forEach((t) => { nameOf[t.pc] = t.name; });
     nameOf[r.bass.pc] = r.bass.name;
-    let whites = '';
-    let blacks = '';
-    let labels = '';
-    let x = 0;
-    const whiteX = {};
-    for (let m = LO; m <= HI; m++) {
-      if (isBlack(m)) continue;
-      whiteX[m] = x;
-      const on = sounding.has(m);
-      whites += '<rect class="pk-w' + (on ? (m === v.bass ? ' is-bass' : ' is-on') : '') + '" x="' + x + '" y="0" width="' + (W - 1) + '" height="64" rx="2"/>';
-      if (on) labels += '<text class="pk-label" x="' + (x + (W - 1) / 2) + '" y="56">' + esc(nameOf[m % 12] || '') + '</text>';
-      if (m % 12 === 0) labels += '<text class="pk-oct" x="' + (x + 2) + '" y="76">C' + (Math.floor(m / 12) - 1) + '</text>';
-      x += W;
-    }
-    for (let m = LO; m <= HI; m++) {
-      if (!isBlack(m)) continue;
-      const bx = whiteX[m - 1] + W - 4.5;
-      const on = sounding.has(m);
-      blacks += '<rect class="pk-b' + (on ? (m === v.bass ? ' is-bass' : ' is-on') : '') + '" x="' + bx + '" y="0" width="8" height="40" rx="1.5"/>';
-      if (on) labels += '<text class="pk-label pk-label-b" x="' + (bx + 4) + '" y="34">' + esc(nameOf[m % 12] || '') + '</text>';
-    }
-    return '<svg class="piano" viewBox="-1 -1 ' + (x + 1) + ' 80" role="img" aria-label="Piano voicing: ' +
-      esc([v.bass].concat(v.upper).map((m) => nameOf[m % 12]).join(' ')) + '">' + whites + blacks + labels + '</svg>';
+    return nameOf;
   }
 
-  function guitarSVG(shape, r) {
-    const frets = shape.frets;
-    const fretted = frets.filter((f) => f > 0);
-    const maxF = fretted.length ? Math.max.apply(null, fretted) : 0;
-    const minF = fretted.length ? Math.min.apply(null, fretted) : 0;
-    const start = maxF <= 4 ? 1 : minF;
-    const rows = 4;
-    const sx = 22; const sy = 26; const gap = 20; const fh = 26;
-    const width = sx * 2 + gap * 5;
-    let s = '';
-    // strings + frets
-    for (let i = 0; i < 6; i++) s += '<line class="gs" x1="' + (sx + i * gap) + '" y1="' + sy + '" x2="' + (sx + i * gap) + '" y2="' + (sy + rows * fh) + '"/>';
-    for (let f = 0; f <= rows; f++) {
-      const cls = f === 0 && start === 1 ? 'gnut' : 'gf';
-      s += '<line class="' + cls + '" x1="' + sx + '" y1="' + (sy + f * fh) + '" x2="' + (sx + gap * 5) + '" y2="' + (sy + f * fh) + '"/>';
+  function shapeSection(r, v, shapes) {
+    const nameOf = nameMap(r);
+    if (state.instrument === 'piano') {
+      const on = new Set(v.upper);
+      return '<div class="inst"><p class="eyebrow">Piano voicing</p>' + I.keyboard({
+        lo: 36, hi: 83,
+        label: 'Piano voicing: ' + [v.bass].concat(v.upper).map((m) => nameOf[m % 12]).join(' '),
+        mark: (m) => (m === v.bass ? { role: 'bass', label: nameOf[m % 12] } : on.has(m) ? { role: 'tone', label: nameOf[m % 12] } : null),
+      }) + '</div>';
     }
-    if (start > 1) s += '<text class="gpos" x="' + (sx + gap * 5 + 8) + '" y="' + (sy + fh / 2 + 4) + '">' + start + 'fr</text>';
-    // barre
-    if (shape.barre) {
-      const y = sy + (shape.barre.fret - start + 0.5) * fh;
-      s += '<rect class="gbarre" x="' + (sx + shape.barre.from * gap - 7) + '" y="' + (y - 7) + '" width="' + ((shape.barre.to - shape.barre.from) * gap + 14) + '" height="14" rx="7"/>';
+    const instName = T.TUNINGS[state.instrument].name;
+    if (!shapes.length) return '<div class="inst"><p class="eyebrow">' + instName + '</p><p class="muted">No comfortable shape found.</p></div>';
+    const shape = shapes[ui.shape];
+    const tab = shape.frets.map((f) => (f < 0 ? 'x' : f)).join(' ');
+    return '<div class="inst inst-guitar"><div class="inst-head"><p class="eyebrow">' + instName + ' shape</p>' +
+      (shapes.length > 1
+        ? '<div class="shape-nav"><button type="button" class="btn btn-quiet btn-tiny" data-shape="-1" aria-label="Previous shape">‹</button>' +
+          '<span class="shape-count">' + (ui.shape + 1) + ' of ' + shapes.length + '</span>' +
+          '<button type="button" class="btn btn-quiet btn-tiny" data-shape="1" aria-label="Next shape">›</button></div>'
+        : '') +
+      '</div><div class="guitar-wrap">' + I.chordBox(shape, r.root.pc, nameOf, state.instrument) + '<p class="tab">' + esc(tab) + '</p></div></div>';
+  }
+
+  // The back of the card: chord tones solid, the rest of the scale hollow, root in amber.
+  function scaleMark(sc, chordPcs, pc) {
+    const i = sc.pcs.indexOf(pc);
+    if (i < 0) return null;
+    const role = pc === sc.root.pc ? 'root' : chordPcs.indexOf(pc) > -1 ? 'tone' : (sc.blue && sc.blue.has(pc) ? 'blue' : 'scale');
+    return { role, label: sc.degrees[i], name: sc.notes[i].name };
+  }
+
+  function scaleDiagram(sc, chordPcs, opts) {
+    opts = opts || {};
+    if (state.instrument === 'piano') {
+      return I.keyboard({
+        lo: opts.lo || 48, hi: opts.hi || 71, label: sc.name,
+        mark: (m) => { const mk = scaleMark(sc, chordPcs, T.mod(m, 12)); return mk && { role: mk.role, label: opts.names ? mk.name : mk.label }; },
+      });
     }
-    // dots and markers
-    frets.forEach((f, i) => {
-      const x = sx + i * gap;
-      const pc = f >= 0 ? (T.GUITAR_OPEN[i] + f) % 12 : null;
-      const isRoot = pc === r.root.pc;
-      if (f < 0) s += '<text class="gmark" x="' + x + '" y="' + (sy - 9) + '">×</text>';
-      else if (f === 0) s += '<circle class="gopen' + (isRoot ? ' is-root' : '') + '" cx="' + x + '" cy="' + (sy - 13) + '" r="4.5"/>';
-      else {
-        const y = sy + (f - start + 0.5) * fh;
-        s += '<circle class="gdot' + (isRoot ? ' is-root' : '') + '" cx="' + x + '" cy="' + y + '" r="7.5"/>';
-      }
+    return I.fretboard({
+      instrument: state.instrument, from: 0, to: opts.to || 12, label: sc.name,
+      mark: (s, f, m) => { const mk = scaleMark(sc, chordPcs, T.mod(m, 12)); return mk && { role: mk.role, label: opts.names ? mk.name : mk.label }; },
     });
-    // note names under strings
-    const nameOf = {};
-    r.tones.forEach((t) => { nameOf[t.pc] = t.name; });
-    nameOf[r.bass.pc] = r.bass.name;
-    frets.forEach((f, i) => {
-      if (f < 0) return;
-      s += '<text class="gname" x="' + (sx + i * gap) + '" y="' + (sy + rows * fh + 18) + '">' + esc(nameOf[(T.GUITAR_OPEN[i] + f) % 12] || '') + '</text>';
-    });
-    const tab = frets.map((f) => (f < 0 ? 'x' : f)).join(' ');
-    return '<div class="guitar-wrap"><svg class="guitar" viewBox="0 0 ' + (width + 22) + ' ' + (sy + rows * fh + 28) + '" role="img" aria-label="Guitar shape ' + esc(tab) + ', low string first">' + s + '</svg>' +
-      '<p class="tab">' + esc(tab) + '</p></div>';
+  }
+
+  function scaleSection(sc, r) {
+    return '<div class="inst"><div class="inst-head"><p class="eyebrow">Play over it</p>' +
+      '<button type="button" class="btn btn-quiet btn-small" id="hearScale">Hear the scale</button></div>' +
+      '<p class="scale-name">' + fmtNote(sc.name) + '</p>' +
+      '<p class="scale-why">' + esc(sc.why.charAt(0).toUpperCase() + sc.why.slice(1)) + '. ' +
+        fmtNote(sc.notes.map((n) => n.name).join(' ')) + '</p>' +
+      scaleDiagram(sc, r.pcs) +
+      I.legend([{ role: 'root', text: 'root' }, { role: 'tone', text: 'chord tone' }, { role: 'scale', text: 'scale tone' }]) +
+      '</div>';
   }
 
   // ---------- save and share ----------
@@ -898,6 +1002,7 @@
     ui.selected = null;
     persist();
     renderAll();
+    showView(m === 'minor' ? 'dark' : 'progressions');
   }
 
   $('#shareBtn').addEventListener('click', () => {
@@ -944,11 +1049,88 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.target.closest('input, select, textarea, button, [contenteditable]')) return;
-    if (e.key === ' ' && prog().length) {
+    if (e.key === ' ' && (state.view === 'progressions' || state.view === 'dark') && prog().length) {
       e.preventDefault();
       if (ui.playing) stopPlayback(); else startPlayback();
     }
   });
+
+  // ---------- views and instrument ----------
+
+  const views = {};
+  const toolNav = $('#toolNav');
+  const instSwitch = $('#instSwitch');
+  const instListeners = [];
+
+  function registerView(name, api) { views[name] = api; }
+
+  // Progressions and Dark harmony share one board; the tab picks the mode.
+  function showView(name, quiet) {
+    const board = name === 'progressions' || name === 'dark';
+    if (!board && !views[name]) name = 'progressions';
+    if (name !== state.view) {
+      stopPlayback();
+      Object.keys(views).forEach((v) => views[v].stop && views[v].stop());
+    }
+    state.view = name;
+    const wantMode = name === 'dark' ? 'minor' : 'major';
+    if ((name === 'progressions' || name === 'dark') && state.mode !== wantMode) setMode(wantMode);
+    persist();
+    toolNav.querySelectorAll('.tool-btn').forEach((b) => {
+      if (b.dataset.view === name) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
+    const panel = name === 'dark' ? 'progressions' : name;
+    document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== 'view-' + panel; });
+    document.documentElement.dataset.view = name;
+    if (panel === 'progressions') {
+      placeKeyMarker();
+      requestAnimationFrame(drawArrows);
+    } else if (views[name] && views[name].show) {
+      views[name].show();
+    }
+    if (!quiet) window.scrollTo({ top: 0 });
+  }
+
+  toolNav.addEventListener('click', (e) => {
+    const b = e.target.closest('.tool-btn');
+    if (b) showView(b.dataset.view);
+  });
+
+  function renderInstrument() {
+    instSwitch.querySelectorAll('button').forEach((b) => {
+      const on = b.dataset.inst === state.instrument;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+
+  instSwitch.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b || b.dataset.inst === state.instrument) return;
+    state.instrument = b.dataset.inst;
+    ui.shape = 0;
+    persist();
+    renderInstrument();
+    renderDetail(true);
+    instListeners.forEach((fn) => fn(state.instrument));
+  });
+  instSwitch.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const list = ['guitar', 'piano', 'ukulele'];
+    const i = list.indexOf(state.instrument);
+    const next = list[(i + (e.key === 'ArrowRight' ? 1 : 2)) % 3];
+    instSwitch.querySelector('[data-inst="' + next + '"]').click();
+    instSwitch.querySelector('[data-inst="' + next + '"]').focus();
+  });
+
+  // Shared with blues.js and scales.js.
+  window.Changes = {
+    state, persist, toast, esc, fmtNote, chordHTML, stripHTML, placeMarker, bindStrip,
+    scaleMark, nameMap, registerView,
+    onInstrument: (fn) => instListeners.push(fn),
+  };
 
   // ---------- boot ----------
 
@@ -972,6 +1154,7 @@
       return;
     }
     state.mode = shared.mode;
+    state.view = shared.mode === 'minor' ? 'dark' : 'progressions';
     state.keys[shared.mode] = shared.key;
     state.sevenths = shared.sevenths;
     state.progs[shared.mode] = shared.ids;
@@ -981,18 +1164,27 @@
 
   readHash();
   renderAll();
+  renderInstrument();
+  const viewParam = new URLSearchParams(location.search).get('view');
+  // blues.js and scales.js load after this file, so pick the view once they have registered.
+  document.addEventListener('DOMContentLoaded', () => showView(viewParam || state.view, true));
   window.addEventListener('hashchange', () => {
     if (!location.hash) return;
     stopPlayback();
     ui.selected = null;
     readHash();
     renderAll();
+    showView(state.view);
   });
 
   let resizeRaf = 0;
   window.addEventListener('resize', () => {
     cancelAnimationFrame(resizeRaf);
-    resizeRaf = requestAnimationFrame(() => { placeKeyMarker(); drawArrows(); });
+    resizeRaf = requestAnimationFrame(() => {
+      placeKeyMarker();
+      drawArrows();
+      document.querySelectorAll('.view:not([hidden]) .keystrip').forEach(placeMarker);
+    });
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { placeKeyMarker(); drawArrows(); });
 })();

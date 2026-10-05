@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Changes · chord progression finder</title>
-  <meta name="description" content="Pick a key, start from the main chords, and follow the arrows into secondary dominants, borrowed chords, diminished passing chords and the Neapolitan.">
+  <meta name="description" content="A slide rule for harmony: chord progressions with secondary dominants, borrowed and diminished chords, the 12-bar blues, and every scale with its chords and modes. For guitar, piano and ukulele.">
   <meta name="theme-color" content="#1C1B1A">
   <meta property="og:title" content="Changes · chord progression finder">
   <meta property="og:description" content="A slide rule for harmony. Pick a key, follow the arrows, hear the progression.">
@@ -40,15 +40,27 @@
         </span>
       </a>
 
-      <div class="mode" role="radiogroup" aria-label="Mode" id="modeSwitch">
-        <button class="mode-btn" role="radio" data-mode="major">
-          <span class="mode-name">Major</span><span class="mode-sub">lights up</span>
-        </button>
-        <button class="mode-btn" role="radio" data-mode="minor">
-          <span class="mode-name">Minor</span><span class="mode-sub">after hours</span>
-        </button>
+      <nav class="tools" aria-label="Tools" id="toolNav">
+        <button class="tool-btn" data-view="progressions" aria-current="page">Progressions</button>
+        <button class="tool-btn" data-view="dark">Dark harmony</button>
+        <button class="tool-btn" data-view="blues">Blues</button>
+        <button class="tool-btn" data-view="scales">Scales</button>
+      </nav>
+
+      <div class="seg seg-inst" role="radiogroup" aria-label="Instrument" id="instSwitch">
+        <button role="radio" data-inst="guitar">Guitar</button>
+        <button role="radio" data-inst="piano">Piano</button>
+        <button role="radio" data-inst="ukulele">Ukulele</button>
       </div>
     </header>
+
+    <div class="view" id="view-progressions">
+    <div class="view-head">
+      <div>
+        <h1 class="view-title" id="progTitleMain">Progressions</h1>
+        <p class="view-sub" id="progSub">Major keys. Start in the middle row, then follow the arrows up and down.</p>
+      </div>
+    </div>
 
     <section class="controls" aria-label="Key and options">
       <div class="keybar">
@@ -136,7 +148,24 @@
               </select>
             </label>
             <button class="toggle toggle-small" id="loopBtn" aria-pressed="false"><span class="toggle-dot" aria-hidden="true"></span>Loop</button>
+            <button class="toggle toggle-small" id="melodyBtn" aria-pressed="false"><span class="toggle-dot" aria-hidden="true"></span>Melody</button>
+            <label class="field field-harm">
+              <span class="field-label">Harmonies</span>
+              <select id="harmonies" aria-describedby="harmHint">
+                <option value="0">None</option>
+                <option value="1">1 voice</option>
+                <option value="2">2 voices</option>
+                <option value="3">3 voices</option>
+                <option value="4">4 voices</option>
+                <option value="5">5 voices</option>
+              </select>
+              <span class="sr-only" id="harmHint">Turn on Melody to add harmony voices under it.</span>
+            </label>
             <span class="transport-spacer"></span>
+            <button class="btn" id="midiBtn" type="button">
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 V10.5 M4.5 7 L8 10.5 L11.5 7 M3 13.5 H13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Export MIDI
+            </button>
             <button class="btn" id="saveBtn" type="button">Save</button>
             <button class="btn" id="shareBtn" type="button">Copy link</button>
           </div>
@@ -194,6 +223,10 @@
     <footer class="foot">
       <p>Click a chord to add it. Lit chords follow the arrows. Turn off <em>Follow the arrows</em> to play anything.</p>
     </footer>
+    </div>
+
+    <div class="view" id="view-blues" hidden></div>
+    <div class="view" id="view-scales" hidden></div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
@@ -203,6 +236,10 @@
 
   <script src="theory.js"></script>
   <script src="audio.js"></script>
+  <script src="midi.js"></script>
+  <script src="instruments.js"></script>
   <script src="app.js"></script>
+  <script src="blues.js"></script>
+  <script src="scales.js"></script>
 </body>
 </html>

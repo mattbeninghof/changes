@@ -90,6 +90,74 @@
     o1.onended = () => live.delete(node);
   }
 
+  // A soft, slightly breathy lead for melodies.
+  function lead(midi, t, dur, vel) {
+    const c = ensure();
+    if (!c) return false;
+    t = Math.max(t || 0, c.currentTime + 0.005);
+    vel = vel || 0.11;
+    const f = hz(midi);
+    const o = c.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f;
+    const o2 = c.createOscillator();
+    o2.type = 'triangle';
+    o2.frequency.value = f;
+    o2.detune.value = -6;
+    const g2 = c.createGain();
+    g2.gain.value = 0.35;
+    const vib = c.createOscillator();
+    vib.frequency.value = 5.2;
+    const vibAmt = c.createGain();
+    vibAmt.gain.setValueAtTime(0, t);
+    vibAmt.gain.linearRampToValueAtTime(f * 0.004, t + Math.min(0.4, dur));
+    vib.connect(vibAmt).connect(o.frequency);
+    const env = c.createGain();
+    const end = t + dur;
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(vel, t + 0.03);
+    env.gain.setTargetAtTime(vel * 0.6, t + 0.05, 0.25);
+    env.gain.setTargetAtTime(0.0001, end, 0.06);
+    o.connect(env);
+    o2.connect(g2).connect(env);
+    env.connect(dry);
+    env.connect(dry.room);
+    const node = { o1: o, o2, env };
+    live.add(node);
+    [o, o2, vib].forEach((x) => { x.start(t); x.stop(end + 0.4); });
+    o.onended = () => live.delete(node);
+    return true;
+  }
+
+  // Short plucked bass for walking and boogie lines.
+  function bass(midi, t, dur, vel) {
+    const c = ensure();
+    if (!c) return false;
+    t = Math.max(t || 0, c.currentTime + 0.005);
+    vel = vel || 0.22;
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = hz(midi);
+    const o2 = c.createOscillator();
+    o2.type = 'sine';
+    o2.frequency.value = hz(midi);
+    const env = c.createGain();
+    const end = t + dur;
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(vel, t + 0.008);
+    env.gain.exponentialRampToValueAtTime(vel * 0.4, Math.max(t + 0.02, end - 0.02));
+    env.gain.exponentialRampToValueAtTime(0.0001, end + 0.08);
+    o.connect(env);
+    o2.connect(env);
+    env.connect(dry);
+    const node = { o1: o, o2, env };
+    live.add(node);
+    o.start(t); o2.start(t);
+    o.stop(end + 0.1); o2.stop(end + 0.1);
+    o.onended = () => live.delete(node);
+    return true;
+  }
+
   // voicing: { bass, upper: [midi...] }. strum spreads the notes slightly.
   function playChord(voicing, when, dur, opts) {
     const c = ensure();
@@ -97,8 +165,19 @@
     opts = opts || {};
     const t = Math.max(when || 0, c.currentTime + 0.01);
     const strum = opts.strum == null ? 0.018 : opts.strum;
-    voice(voicing.bass, t, dur, 0.2);
-    voicing.upper.forEach((m, i) => voice(m, t + strum * (i + 1), dur - strum * (i + 1), 0.12));
+    const vel = opts.vel == null ? 1 : opts.vel;
+    if (voicing.bass != null && !opts.noBass) voice(voicing.bass, t, dur, 0.2 * vel);
+    voicing.upper.forEach((m, i) => voice(m, t + strum * (i + 1), Math.max(0.06, dur - strum * (i + 1)), 0.12 * vel));
+    return true;
+  }
+
+  // Play loose notes (a scale or an arpeggio) one after another.
+  function playLine(midis, step) {
+    const c = ensure();
+    if (!c) return false;
+    step = step || 0.22;
+    const t0 = c.currentTime + 0.03;
+    midis.forEach((m, i) => voice(m, t0 + i * step, step * 1.6, 0.13));
     return true;
   }
 
@@ -120,6 +199,9 @@
     supported,
     ensure,
     playChord,
+    playLine,
+    lead,
+    bass,
     stopAll,
     now: () => (ctx ? ctx.currentTime : 0),
   };
