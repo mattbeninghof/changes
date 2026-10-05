@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changes · chord progression finder</title>
+  <meta name="description" content="Pick a key, start from the main chords, and follow the arrows into secondary dominants, borrowed chords, diminished passing chords and the Neapolitan.">
+  <meta name="theme-color" content="#1C1B1A">
+  <meta property="og:title" content="Changes · chord progression finder">
+  <meta property="og:description" content="A slide rule for harmony. Pick a key, follow the arrows, hear the progression.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/icon-512.png">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#board">Skip to the chord board</a>
+
+  <div class="app">
+    <header class="top">
+      <a class="brand" href="./" aria-label="Changes, home">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="var(--surface)"/>
+          <path d="M12 19H52M12 32H52M12 45H52" stroke="var(--ink)" stroke-width="2" opacity=".45"/>
+          <g fill="var(--accent)">
+            <ellipse cx="32" cy="45" rx="6.6" ry="4.6" transform="rotate(-22 32 45)"/>
+            <ellipse cx="32" cy="32" rx="6.6" ry="4.6" transform="rotate(-22 32 32)"/>
+            <ellipse cx="32" cy="19" rx="6.6" ry="4.6" transform="rotate(-22 32 19)"/>
+          </g>
+        </svg>
+        <span class="brand-text">
+          <span class="brand-name">Changes</span>
+          <span class="brand-tag">a slide rule for harmony</span>
+        </span>
+      </a>
+
+      <div class="mode" role="radiogroup" aria-label="Mode" id="modeSwitch">
+        <button class="mode-btn" role="radio" data-mode="major">
+          <span class="mode-name">Major</span><span class="mode-sub">lights up</span>
+        </button>
+        <button class="mode-btn" role="radio" data-mode="minor">
+          <span class="mode-name">Minor</span><span class="mode-sub">after hours</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Key and options">
+      <div class="keybar">
+        <div class="keybar-head">
+          <span class="eyebrow">Set the key</span>
+          <span class="key-now" id="keyNow"></span>
+        </div>
+        <div class="keystrip" id="keyStrip" role="radiogroup" aria-label="Key"></div>
+      </div>
+      <div class="toggles">
+        <button class="toggle" id="optSevenths" aria-pressed="true">
+          <span class="toggle-dot" aria-hidden="true"></span>Sevenths
+        </button>
+        <button class="toggle" id="optGuided" aria-pressed="true">
+          <span class="toggle-dot" aria-hidden="true"></span>Follow the arrows
+        </button>
+      </div>
+    </section>
+
+    <main class="layout">
+      <div class="col-main">
+        <section class="card board-card" aria-labelledby="boardTitle">
+          <h2 class="sr-only" id="boardTitle">Chord board</h2>
+          <div class="board" id="board" tabindex="-1">
+            <div class="lanes" id="lanes"></div>
+            <svg class="arrows" id="arrows" aria-hidden="true">
+              <defs>
+                <marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M1 1.5 L8.5 5 L1 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </marker>
+              </defs>
+              <g id="arrowPaths"></g>
+            </svg>
+          </div>
+        </section>
+
+        <section class="card prog-card" aria-labelledby="progTitle">
+          <div class="card-head">
+            <h2 class="card-title" id="progTitle">Your progression</h2>
+            <div class="prog-tools">
+              <button class="btn btn-quiet" id="undoBtn" type="button">Undo</button>
+              <button class="btn btn-quiet" id="clearBtn" type="button">Clear</button>
+            </div>
+          </div>
+
+          <ol class="prog" id="prog" aria-label="Chords in order"></ol>
+
+          <div class="prog-empty" id="progEmpty">
+            <svg class="spot" viewBox="0 0 220 120" aria-hidden="true">
+              <g fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M34 18.5 C70 16.8 150 15.6 184 17.4 L186.5 98.8 C150 100.6 70 101.4 36.2 100.4 Z" fill="var(--surface-2)"/>
+                <path d="M48 44.2 C90 43.4 140 43.2 172 43.8" opacity=".5"/>
+                <path d="M48 76.4 C90 75.8 140 75.6 172 76.2" opacity=".5"/>
+                <path d="M48 32 V44.5 M79 31.6 V44 M110 31.4 V43.8 M141 31.4 V43.8 M172 31.6 V44" opacity=".5"/>
+                <path d="M48 64 V76.6 M79 63.8 V76.4 M110 63.6 V76.2 M141 63.6 V76.2 M172 63.8 V76.4" opacity=".5"/>
+                <path d="M56 41 L60 34 M62 41 L66 34 M68 41 L72 34" stroke="var(--accent)"/>
+                <path d="M87 40.6 L91 33.6 M93 40.6 L97 33.6 M99 40.6 L103 33.6" stroke="var(--accent)"/>
+                <path d="M118 40.4 L122 33.4" stroke="var(--accent)"/>
+                <path d="M160 108 L198 66.5 L205.5 73 L167.5 114.5 L158 117 Z" fill="var(--surface)"/>
+                <path d="M160 108 L167.5 114.5 M195 70 L202.5 76.4"/>
+                <path d="M158 117 L161.4 112.6" stroke="var(--accent)" stroke-width="2.2"/>
+              </g>
+            </svg>
+            <p class="empty-title">Start with any main chord.</p>
+            <p class="empty-copy">Tap a chord in the middle row to hear it and add it here. Or start from one of these:</p>
+            <div class="examples" id="examples"></div>
+          </div>
+
+          <div class="transport" id="transport">
+            <button class="btn btn-primary" id="playBtn" type="button" aria-pressed="false">
+              <svg class="icon icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8 L13 8 L4.5 13.2 Z" fill="currentColor"/></svg>
+              <svg class="icon icon-stop" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor"/></svg>
+              <span class="play-label">Play</span>
+            </button>
+            <label class="field field-tempo">
+              <span class="field-label">Tempo <output id="tempoOut">84</output></span>
+              <input type="range" id="tempo" min="50" max="160" step="2" value="84">
+            </label>
+            <label class="field">
+              <span class="field-label">Beats per chord</span>
+              <select id="beats">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="4" selected>4</option>
+              </select>
+            </label>
+            <button class="toggle toggle-small" id="loopBtn" aria-pressed="false"><span class="toggle-dot" aria-hidden="true"></span>Loop</button>
+            <span class="transport-spacer"></span>
+            <button class="btn" id="saveBtn" type="button">Save</button>
+            <button class="btn" id="shareBtn" type="button">Copy link</button>
+          </div>
+
+          <form class="saveform" id="saveForm" hidden>
+            <label class="sr-only" for="saveName">Name this progression</label>
+            <input id="saveName" type="text" maxlength="48" placeholder="Name it, like Verse idea" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Save it</button>
+            <button class="btn btn-quiet" type="button" id="saveCancel">Cancel</button>
+          </form>
+        </section>
+      </div>
+
+      <aside class="col-side">
+        <section class="card detail" id="detail" aria-live="polite" aria-labelledby="detailTitle">
+          <h2 class="sr-only" id="detailTitle">Chord details</h2>
+          <div class="detail-empty" id="detailEmpty">
+            <svg class="spot spot-lamp" viewBox="0 0 220 170" aria-hidden="true">
+              <defs>
+                <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="var(--accent)" stop-opacity=".34"/>
+                  <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M90.5 63 L48 160 H172 L129.5 63 Z" fill="url(#cone)"/>
+              <g fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M110 0 C110.6 12 109.4 24 110 36"/>
+                <path d="M86 63 C87.5 47 97 38.5 110 38.5 C123 38.5 132.5 47 134 63 Z" fill="var(--surface-2)"/>
+                <path d="M104 38.8 C104.5 35.6 106.8 34 110 34 C113.2 34 115.5 35.6 116 38.8"/>
+                <path d="M78 121 L142 119.4 L139.6 94.6 L80.6 96 Z" fill="var(--surface)"/>
+                <path d="M86 103.4 H99 M104 103 H121 M126 102.8 H133" opacity=".6"/>
+                <path d="M86 111.4 H95 M100 111.2 H114 M119 111 H132" opacity=".6"/>
+                <path d="M110.4 121 C110 133 110.6 146 110.2 158"/>
+                <path d="M94 165 C100 161.6 105 159.6 110.2 158 C115.4 159.6 120.4 161.6 126.6 165"/>
+                <path d="M79 121 L141 119.6 L141 123.4 L79.4 124.8 Z" fill="var(--surface-2)"/>
+              </g>
+              <circle cx="110" cy="64.5" r="5" fill="var(--accent)"/>
+            </svg>
+            <p class="empty-title">Nothing under the lamp yet.</p>
+            <p class="empty-copy">Tap any chord to hear it, see where it wants to go, and get the shape for piano and guitar.</p>
+          </div>
+          <div class="detail-body" id="detailBody" hidden></div>
+        </section>
+
+        <section class="card saved" aria-labelledby="savedTitle">
+          <div class="card-head">
+            <h2 class="card-title" id="savedTitle">Saved</h2>
+          </div>
+          <ul class="saved-list" id="savedList"></ul>
+          <p class="saved-empty" id="savedEmpty">Progressions you save live here, in this browser.</p>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      <p>Click a chord to add it. Lit chords follow the arrows. Turn off <em>Follow the arrows</em> to play anything.</p>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toastMsg"></span>
+    <button class="toast-action" id="toastAction" type="button" hidden></button>
+  </div>
+
+  <script src="theory.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
